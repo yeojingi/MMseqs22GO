@@ -12,12 +12,17 @@
 #include "MemoryMapped.h"
 #include "NcbiTaxonomy.h"
 #include "MappingReader.h"
+#include "FuncReader.h"
+#include "goparser.h"
+
+#include <iostream>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
 #include "result_viz_prelude.html.zst.h"
 
 #include <map>
+#include <vector>
 
 #ifdef OPENMP
 #include <omp.h>
@@ -162,23 +167,35 @@ int convertalignments(int argc, const char **argv, const Command &command) {
     bool needSource = false;
     bool needTaxonomy = false;
     bool needTaxonomyMapping = false;
+    bool needFuncMapping = false;
     const std::vector<int> outcodes = Parameters::getOutputFormat(format, par.outfmt, needSequenceDB, needBacktrace, needFullHeaders,
-                                                                  needLookup, needSource, needTaxonomyMapping, needTaxonomy);
+                                                                  needLookup, needSource, needTaxonomyMapping, needTaxonomy, needFuncMapping);
 
     NcbiTaxonomy* t = NULL;
     if(needTaxonomy){
         std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
         t = NcbiTaxonomy::openTaxonomy(db2NoIndexName);
     }
+    
     MappingReader* mapping = NULL;
     if (needTaxonomy || needTaxonomyMapping) {
         std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
         mapping = new MappingReader(db2NoIndexName);
     }
 
+    int dbaccessMode = needSequenceDB ? (DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA) : (DBReader<unsigned int>::USE_INDEX);
+
+    FuncReader* funcMapping = NULL;
+    IndexReader* tGoDbr = NULL;
+    if (needFuncMapping) {
+        // IndexReader fDbr(par.db1, par.threads,  IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
+        tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
+        std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
+        funcMapping = new FuncReader(db2NoIndexName);
+    }
+
     bool isTranslatedSearch = false;
 
-    int dbaccessMode = needSequenceDB ? (DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA) : (DBReader<unsigned int>::USE_INDEX);
 
     std::map<unsigned int, unsigned int> qKeyToSet;
     std::map<unsigned int, unsigned int> tKeyToSet;
@@ -406,7 +423,17 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                 }
 
                 size_t tHeaderId = tDbrHeader->sequenceReader->getId(res.dbKey);
+                size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+                if (tGoId == UINT_MAX) {
+                    continue;
+                }
+                // std::cout << tGoId << std::endl;
+                const char *tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+                size_t tGoLen = tGoDbr->sequenceReader->getSeqLen(tGoId);
+                // const char *tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+                // std::cout << *tGo << std::endl;
                 const char *tHeader = tDbrHeader->sequenceReader->getData(tHeaderId, thread_idx);
+                // std::cout << *tHeader << std::endl;
                 size_t tHeaderLen = tDbrHeader->sequenceReader->getSeqLen(tHeaderId);
                 std::string targetId = Util::parseFastaHeader(tHeader);
 
@@ -474,6 +501,36 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                                 } else if (needTaxonomy) {
                                     taxonNode = t->taxonNode(taxon, false);
                                 }
+                            }
+
+                            std::vector<unsigned int>* goids;
+                            std::string goidStr;
+                            
+                            if (needFuncMapping) {
+                                // Do you know Gene ontology?
+                                // goids = funcMapping->lookup(res.dbKey); // goids is a pointer to std::vector<unsigned int>
+                            
+                                // if (!goids || goids->empty()) {
+                                //     std::cout << res.dbKey << std::endl;
+                                //     std::cout << goids->empty() << std::endl;
+                                //     goidStr = "";  // Empty string for no GO IDs
+                                // } else {
+                                //     for (size_t i = 0; i < goids->size(); i++) {
+                                //         if (i > 0) goidStr += " ";  // Add space separator
+                            
+                                //         // Manually build "GO:000xxxx" format
+                                //         goidStr += "GO:";
+                                //         std::string numStr = SSTR((*goids)[i]);  // Convert number to string
+                            
+                                //         // Pad with leading zeros if needed
+                                //         goidStr.append(7 - numStr.size(), '0');  // Add missing leading zeros
+                                //         goidStr += numStr;
+                                //     }
+                                //     std::cout << res.dbKey << goids->size() << std::endl;
+                                // }
+                                
+                                // std::cout << goids->size()  << std::endl;
+                                // std::cout << goids->size() << "-" << goidStr << std::endl;
                             }
 
                             if (needSequenceDB) {
@@ -588,10 +645,10 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                                         break;
                                     }
                                     case Parameters::OUTFMT_MISMATCH:
-                                        result.append(SSTR(missMatchCount));
-                                        break;
+                                    result.append(SSTR(missMatchCount));
+                                    break;
                                     case Parameters::OUTFMT_QCOV:
-                                        result.append(SSTR(res.qcov));
+                                    result.append(SSTR(res.qcov));
                                         break;
                                     case Parameters::OUTFMT_TCOV:
                                         result.append(SSTR(res.dbcov));
@@ -683,6 +740,9 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                                         result.append(SSTR(frame));
                                         break;
                                     } 
+                                    case Parameters::OUTFMT_GO:
+                                        result.append(goParser(tGo, tGoLen));
+                                        break;
                                 }
                                 if (i < outcodes.size() - 1) {
                                     result.push_back('\t');
@@ -848,6 +908,12 @@ int convertalignments(int argc, const char **argv, const Command &command) {
     if (isDb == false) {
         FileUtil::remove(par.db4Index.c_str());
     }
+
+    if (needFuncMapping) {
+        delete tGoDbr;
+        delete funcMapping;
+    }
+
     if (needTaxonomy) {
         delete t;
     }

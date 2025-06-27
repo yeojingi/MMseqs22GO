@@ -86,6 +86,7 @@ public:
     static const int DBTYPE_SEQTAXDB = 18; // needed for verification
     static const int DBTYPE_STDIN = 19; // needed for verification
     static const int DBTYPE_URI = 20; // needed for verification
+    static const int DBTYPE_GENE_ONTOLOGY = 21; // needed for verification
 
     static const unsigned int DBTYPE_EXTENDED_COMPRESSED = 1;
     static const unsigned int DBTYPE_EXTENDED_INDEX_NEED_SRC = 2;
@@ -186,6 +187,7 @@ public:
     static const int OUTFMT_TORFEND = 38;
     static const int OUTFMT_FIDENT = 39;
     static const int OUTFMT_PPOS = 40;
+    static const int OUTFMT_GO = 41;
 
     static const int INDEX_SUBSET_NORMAL = 0;
     static const int INDEX_SUBSET_NO_HEADERS = 1;
@@ -194,7 +196,7 @@ public:
 
 
     static std::vector<int> getOutputFormat(int formatMode, const std::string &outformat, bool &needSequences, bool &needBacktrace, bool &needFullHeaders,
-                                            bool &needLookup, bool &needSource, bool &needTaxonomyMapping, bool &needTaxonomy);
+                                            bool &needLookup, bool &needSource, bool &needTaxonomyMapping, bool &needTaxonomy, bool &needFuncMapping);
 
     // clustering
     static const int SET_COVER = 0;
@@ -691,6 +693,9 @@ public:
     // taxonomyreport
     int reportMode;
 
+    // createfuncdb
+    std::string funcMappingFile;
+
     // createtaxdb
     std::string ncbiTaxDump;
     std::string taxMappingFile;
@@ -1048,6 +1053,9 @@ public:
     // taxonomyreport
     PARAMETER(PARAM_REPORT_MODE)
 
+    // createfuncdb
+    PARAMETER(PARAM_FUNC_MAPPING_FILE)
+
     // createtaxdb
     PARAMETER(PARAM_NCBI_TAX_DUMP)
     PARAMETER(PARAM_TAX_MAPPING_FILE)
@@ -1179,6 +1187,7 @@ public:
     std::vector<MMseqsParameter*> easytaxonomy;
     std::vector<MMseqsParameter*> createsubdb;
     std::vector<MMseqsParameter*> renamedbkeys;
+    std::vector<MMseqsParameter*> createfuncdb;
     std::vector<MMseqsParameter*> createtaxdb;
     std::vector<MMseqsParameter*> profile2pssm;
     std::vector<MMseqsParameter*> profile2neff;

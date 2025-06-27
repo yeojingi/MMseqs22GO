@@ -55,7 +55,7 @@ void printUsage(bool showExtended) {
     usage << tool_introduction << "\n\n";
     usage << tool_name << " Version: " << version << "\n";
     usage << "© " << main_author << "\n\n";
-    usage << "usage: " << binary_name << " <command> [<args>]" << "\n";
+    usage << "usage: " << binary_name << " this is jingi <command> [<args>]" << "\n";
 
     std::vector<int> showCategoryHeader(categories.size(), 0);
     for (size_t i = 0; i < categories.size(); ++i) {

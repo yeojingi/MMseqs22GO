@@ -60,6 +60,12 @@ public:
                                                                             PrefilteringIndexReader::ALNINDEX,
                                                                             dataMode & DBReader<unsigned int>::USE_DATA,
                                                                             threads, touchIndex, touchData);
+                } else if (databaseType & GO) {
+                    sequenceReader = PrefilteringIndexReader::openNewReader(index,
+                                                                            PrefilteringIndexReader::ALNDATA,
+                                                                            PrefilteringIndexReader::ALNINDEX,
+                                                                            dataMode & DBReader<unsigned int>::USE_DATA,
+                                                                            threads, touchIndex, touchData);
                 }
                 if (sequenceReader == NULL) {
                     Debug(Debug::INFO) << "Index does not contain plain sequences. Using normal database instead.\n";
@@ -95,6 +101,11 @@ public:
                     }else{
                         failSuffix = "_aln";
                     }
+                } else if (databaseType & GO) {
+                    failSuffix = "_func";
+                    if(FileUtil::fileExists((dataName + "_func.dbtype").c_str())==false){
+                        failSuffix = "_func";
+                    }
                 }
             }
             sequenceReader = new DBReader<unsigned int>(
@@ -115,6 +126,7 @@ public:
     static const unsigned int SRC_HEADERS = 4;
     static const unsigned int SRC_SEQUENCES =  8;
     static const unsigned int ALIGNMENTS = 16;
+    static const unsigned int GO = 32;
     static const unsigned int USER_SELECT = 1 << 31;
 
     static unsigned int makeUserDatabaseType(unsigned int baseKey) {

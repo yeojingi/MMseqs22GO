@@ -43,13 +43,14 @@ int easyrbh(int argc, const char **argv, const Command &command) {
     bool needBacktrace = false;
     bool needTaxonomy = false;
     bool needTaxonomyMapping = false;
+    bool needFuncMapping = false;
     {
         bool needSequenceDB = false;
         bool needFullHeaders = false;
         bool needLookup = false;
         bool needSource = false;
         Parameters::getOutputFormat(par.formatAlignmentMode, par.outfmt, needSequenceDB, needBacktrace, needFullHeaders,
-                needLookup, needSource, needTaxonomyMapping, needTaxonomy);
+                needLookup, needSource, needTaxonomyMapping, needTaxonomy, needFuncMapping);
     }
 
     if (par.formatAlignmentMode == Parameters::FORMAT_ALIGNMENT_SAM || par.greedyBestHits) {

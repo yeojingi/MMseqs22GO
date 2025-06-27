@@ -61,4 +61,5 @@ std::vector<int> DbValidator::flatfileStdinGenericUri = {Parameters::DBTYPE_FLAT
 std::vector<int> DbValidator::resultDb =  {Parameters::DBTYPE_ALIGNMENT_RES, Parameters::DBTYPE_PREFILTER_RES, Parameters::DBTYPE_PREFILTER_REV_RES, Parameters::DBTYPE_CLUSTER_RES};
 std::vector<int> DbValidator::ppResultDb =  {Parameters::DBTYPE_ALIGNMENT_RES, Parameters::DBTYPE_PREFILTER_RES, Parameters::DBTYPE_PREFILTER_REV_RES, Parameters::DBTYPE_CLUSTER_RES, Parameters::DBTYPE_INDEX_DB};
 std::vector<int> DbValidator::taxonomyReportInput =  {Parameters::DBTYPE_ALIGNMENT_RES, Parameters::DBTYPE_PREFILTER_RES, Parameters::DBTYPE_PREFILTER_REV_RES, Parameters::DBTYPE_CLUSTER_RES, Parameters::DBTYPE_TAXONOMICAL_RESULT, Parameters::DBTYPE_NUCLEOTIDES, Parameters::DBTYPE_HMM_PROFILE, Parameters::DBTYPE_AMINO_ACIDS};
+std::vector<int> DbValidator::geneOntology =  {Parameters::DBTYPE_GENE_ONTOLOGY};
 std::vector<int> DbValidator::empty = {};

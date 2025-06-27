@@ -23,6 +23,7 @@ extern int convertkb(int argc, const char **argv, const Command& command);
 extern int convertmsa(int argc, const char **argv, const Command& command);
 extern int convertprofiledb(int argc, const char **argv, const Command& command);
 extern int createdb(int argc, const char **argv, const Command& command);
+extern int createfuncdb(int argc, const char **argv, const Command& command);
 extern int makepaddedseqdb(int argc, const char **argv, const Command& command);
 extern int createindex(int argc, const char **argv, const Command& command);
 extern int createlinindex(int argc, const char **argv, const Command& command);
@@ -140,4 +141,6 @@ extern int filtertaxseqdb(int argc, const char **argv, const Command& command);
 extern int aggregatetax(int argc, const char **argv, const Command& command);
 extern int aggregatetaxweights(int argc, const char **argv, const Command& command);
 extern int diskspaceavail(int argc, const char **argv, const Command& command);
+extern int createfuncdb(int argc, const char **argv, const Command& command);
+extern int functionreport(int argc, const char **argv, const Command& command);
 #endif

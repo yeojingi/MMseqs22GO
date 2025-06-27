@@ -1,0 +1,13 @@
+set(func_header_files
+        func/GeneOntology.h
+        func/FuncReader.h
+        func/goparser.h
+        PARENT_SCOPE
+        )
+set(func_source_files
+        func/createfuncdb.cpp
+        func/GeneOntology.cpp
+        func/goparser.cpp
+        func/functionreport.cpp
+        PARENT_SCOPE
+        )

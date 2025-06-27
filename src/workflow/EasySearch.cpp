@@ -59,6 +59,7 @@ int doeasysearch(int argc, const char **argv, const Command &command, bool linse
     bool needBacktrace = false;
     bool needTaxonomy = false;
     bool needTaxonomyMapping = false;
+    bool needFuncMapping = false;
     bool needLookup = false;
 
     {
@@ -66,7 +67,7 @@ int doeasysearch(int argc, const char **argv, const Command &command, bool linse
         bool needFullHeaders = false;
         bool needSource = false;
         Parameters::getOutputFormat(par.formatAlignmentMode, par.outfmt, needSequenceDB, needBacktrace, needFullHeaders,
-                needLookup, needSource, needTaxonomyMapping, needTaxonomy);
+                needLookup, needSource, needTaxonomyMapping, needTaxonomy, needFuncMapping);
     }
 
     if (par.formatAlignmentMode == Parameters::FORMAT_ALIGNMENT_SAM || par.greedyBestHits) {
