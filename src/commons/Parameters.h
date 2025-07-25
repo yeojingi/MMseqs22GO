@@ -695,6 +695,7 @@ public:
 
     // createfuncdb
     std::string funcMappingFile;
+    std::string goObo;
 
     // createtaxdb
     std::string ncbiTaxDump;
@@ -1055,6 +1056,7 @@ public:
 
     // createfuncdb
     PARAMETER(PARAM_FUNC_MAPPING_FILE)
+    PARAMETER(PARAM_GO_OBO)
 
     // createtaxdb
     PARAMETER(PARAM_NCBI_TAX_DUMP)

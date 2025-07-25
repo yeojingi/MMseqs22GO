@@ -38,6 +38,7 @@ int createfuncdb(int argc, const char **argv, const Command& command) {
     }
     cmd.addVariable("MAPPINGMODE", SSTR(par.taxMappingMode).c_str());
     cmd.addVariable("DBMODE", SSTR(par.taxDbMode).c_str());
+    cmd.addVariable("GOOBO", SSTR(par.goObo).c_str());
     // if (par.ncbiTaxDump.empty()) {
     //     cmd.addVariable("DOWNLOAD_NCBITAXDUMP", "1");
     // }else{
@@ -48,7 +49,8 @@ int createfuncdb(int argc, const char **argv, const Command& command) {
     cmd.addVariable("VERBOSITY_PAR", par.createParameterString(par.onlyverbosity).c_str());
     FileUtil::writeFile(tmp + "/createfuncdb.sh", createfuncdb_sh, createfuncdb_sh_len);
     std::string program(tmp + "/createfuncdb.sh");
-    cmd.execProgram(program.c_str(), par.filenames);
+    std::cout << SSTR(par.goObo).c_str() << std::endl;
+
 
     return EXIT_SUCCESS;
 }

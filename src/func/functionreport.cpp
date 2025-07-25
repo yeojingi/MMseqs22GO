@@ -6,6 +6,11 @@
 #include "Util.h"
 #include "FastSort.h"
 #include "MappingReader.h"
+#include "IndexReader.h"
+#include "FuncReader.h"
+#include "Matcher.h"
+#include "goparser.h"
+#include <unordered_set>
 
 #include <unordered_map>
 
@@ -17,9 +22,101 @@
 
 
 int functionreport(int argc, const char **argv, const Command &command) {
+
+
+
+unsigned int thread_idx = 0;
+#ifdef OPENMP
+thread_idx = omp_get_thread_num();
+#endif        
+    std::string queryHeaderBuffer;
+    queryHeaderBuffer.reserve(1024);
+
     Parameters &par = Parameters::getInstance();
+    bool needFuncMapping = true;
+    bool needBacktrace = false;
+
+    const bool touch = (par.preloadMode != Parameters::PRELOAD_MODE_MMAP);
+    const bool sameDB = par.db1.compare(par.db2) == 0 ? true : false;
+
     par.parseParameters(argc, argv, command, true, 0, 0);
 
+    int dbaccessMode = DBReader<unsigned int>::USE_INDEX;
+    IndexReader qDbr(par.db1, par.threads,  IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
+    IndexReader qDbrHeader(par.db1, par.threads, IndexReader::SRC_HEADERS , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0);
+
+    IndexReader *tDbr;
+    IndexReader *tDbrHeader;
+    if (sameDB) {
+        tDbr = &qDbr;
+        tDbrHeader= &qDbrHeader;
+    } else {
+        tDbr = new IndexReader(par.db2, par.threads, IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
+        tDbrHeader = new IndexReader(par.db2, par.threads, IndexReader::SRC_HEADERS, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0);
+    }
+
+    DBReader<unsigned int> alnDbr(par.db3.c_str(), par.db3Index.c_str(), par.threads, DBReader<unsigned int>::USE_INDEX|DBReader<unsigned int>::USE_DATA);
+    alnDbr.open(DBReader<unsigned int>::LINEAR_ACCCESS);
+
+    FILE *resultFP = FileUtil::openAndDelete(par.db4.c_str(), "w");
+    // fprintf(resultFP, "Hello\n");
+
+    FuncReader* funcMapping = NULL;
+    IndexReader* tGoDbr = NULL;
+    
+    Debug::Progress progress(alnDbr.getSize());
+    if (needFuncMapping) {
+        // IndexReader fDbr(par.db1, par.threads,  IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
+        tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
+        std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
+        funcMapping = new FuncReader(db2NoIndexName);
+    }
+    for (size_t i = 0; i < alnDbr.getSize(); i++) {
+        progress.updateProgress();
+        // fprintf(resultFP, "%d\n", i);
+        const unsigned int queryKey = alnDbr.getDbKey(i);
+
+
+        size_t qHeaderId = qDbrHeader.sequenceReader->getId(queryKey);
+        const char *qHeader = qDbrHeader.sequenceReader->getData(qHeaderId, thread_idx);
+        size_t qHeaderLen = qDbrHeader.sequenceReader->getSeqLen(qHeaderId);
+        std::string queryId = Util::parseFastaHeader(qHeader);
+        queryHeaderBuffer.assign(qHeader, qHeaderLen);
+        qHeader = (char*) queryHeaderBuffer.c_str();
+
+        char *data = alnDbr.getData(i, thread_idx);
+        char *tGo_max;
+        size_t tGoLen_max;
+        double eval_min=100;
+        while (*data != '\0') {
+            Matcher::result_t res = Matcher::parseAlignmentRecord(data, true);
+            data = Util::skipLine(data);
+
+            if (res.backtrace.empty() && needBacktrace == true) {
+                Debug(Debug::ERROR) << "Backtrace cigar is missing in the alignment result. Please recompute the alignment with the -a flag.\n"
+                                        "Command: mmseqs align " << par.db1 << " " << par.db2 << " " << par.db3 << " " << "alnNew -a\n";
+                EXIT(EXIT_FAILURE);
+            }
+
+            if (res.eval < eval_min) {
+                eval_min = res.eval;
+
+                // Debug(Debug::ERROR) << res.dbKey << "\n";
+                size_t tHeaderId = tDbrHeader->sequenceReader->getId(res.dbKey);
+                size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+                if (tGoId == UINT_MAX) {
+                    continue;
+                }
+                // std::cout << tGoId << std::endl;
+                tGo_max = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+                tGoLen_max = tGoDbr->sequenceReader->getSeqLen(tGoId);
+            }
+            
+
+        }
+        if (eval_min != 100)
+            fprintf(resultFP, "%s\t%s\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str());
+    }
 //     NcbiTaxonomy *taxDB = NcbiTaxonomy::openTaxonomy(par.db1);
 //     // allow reading any kind of sequence database
 //     const int readerDbType = FileUtil::parseDbType(par.db2.c_str());
