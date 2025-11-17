@@ -10,20 +10,20 @@
 #include "FuncReader.h"
 #include "Matcher.h"
 #include "goparser.h"
+#include "GeneOntology.h"
 #include <unordered_set>
 
 #include <unordered_map>
 
-// #include "krona_prelude.html.h"
+#include "function.html.h"
 
 #ifdef OPENMP
 #include <omp.h>
 #endif
 
+#define NO_ALIGNMNET 0
 
 int functionreport(int argc, const char **argv, const Command &command) {
-
-
 
 unsigned int thread_idx = 0;
 #ifdef OPENMP
@@ -40,6 +40,16 @@ thread_idx = omp_get_thread_num();
     const bool sameDB = par.db1.compare(par.db2) == 0 ? true : false;
 
     par.parseParameters(argc, argv, command, true, 0, 0);
+    
+    GeneOntology go(par.db2 + "_func_gog");
+    // std::cout << go.getLineage(1) << std::endl;
+    // const GoNode* node = go.getGo(1); // test
+
+    // if (node) {
+    //     std::cout << node->goName << std::endl;
+    // } else {
+    //     std::cout << "GO ID 1 not found\n";
+    // }
 
     int dbaccessMode = DBReader<unsigned int>::USE_INDEX;
     IndexReader qDbr(par.db1, par.threads,  IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
@@ -85,6 +95,7 @@ thread_idx = omp_get_thread_num();
         qHeader = (char*) queryHeaderBuffer.c_str();
 
         char *data = alnDbr.getData(i, thread_idx);
+        int tGoId_max = UINT_MAX;
         char *tGo_max;
         size_t tGoLen_max;
         double eval_min=100;
@@ -110,13 +121,18 @@ thread_idx = omp_get_thread_num();
                 // std::cout << tGoId << std::endl;
                 tGo_max = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
                 tGoLen_max = tGoDbr->sequenceReader->getSeqLen(tGoId);
+                tGoId_max = tGoId;
             }
-            
-
         }
-        if (eval_min != 100)
-            fprintf(resultFP, "%s\t%s\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str());
+        if (eval_min != 100) {
+            // fprintf(resultFP, "%s\t%s\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str());
+            if (tGoId_max == UINT_MAX) {
+                continue;
+            }
+            fprintf(resultFP, "%s\t%s\t%.4e\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str(), eval_min);
+        }
     }
+    std::cout << "Done" << std::endl;
 //     NcbiTaxonomy *taxDB = NcbiTaxonomy::openTaxonomy(par.db1);
 //     // allow reading any kind of sequence database
 //     const int readerDbType = FileUtil::parseDbType(par.db2.c_str());
@@ -207,6 +223,13 @@ thread_idx = omp_get_thread_num();
 //         Debug(Debug::ERROR) << "Cannot close file " << par.db3 << "\n";
 //         return EXIT_FAILURE;
 //     }
+    delete tGoDbr;
+    delete funcMapping;
+    if (!sameDB) {
+        delete tDbr;
+        delete tDbrHeader;
+    } 
+    alnDbr.close();
     return EXIT_SUCCESS;
 }
 

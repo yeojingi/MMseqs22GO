@@ -49,7 +49,8 @@ int createfuncdb(int argc, const char **argv, const Command& command) {
     cmd.addVariable("VERBOSITY_PAR", par.createParameterString(par.onlyverbosity).c_str());
     FileUtil::writeFile(tmp + "/createfuncdb.sh", createfuncdb_sh, createfuncdb_sh_len);
     std::string program(tmp + "/createfuncdb.sh");
-    std::cout << SSTR(par.goObo).c_str() << std::endl;
+    cmd.execProgram(program.c_str(), par.filenames);
+    // std::cout << SSTR(par.goObo).c_str() << std::endl;
 
 
     return EXIT_SUCCESS;

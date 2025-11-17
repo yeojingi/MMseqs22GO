@@ -4,27 +4,29 @@
 // #include "StringBlock.h"
 
 // #include <map>
-// #include <unordered_map>
+#include <unordered_map>
 #include <vector>
 #include <string>
 
 typedef int GoID;
 
 struct GoNode {
-    public:
-        int id;
-        GoID goId;
-        std::vector<GoID> parentGoIds;
-        size_t nParents;
-        std::string goName;
-        // size_t rankIdx;
-        // size_t nameIdx;
-    
-        GoNode() {};
-    
-        GoNode(int id, GoID goId, GoID parentGoIds, size_t nParents, std::string goName)
-                : id(id), goId(goId), parentGoIds(parentGoIds), nParents(nParents), goName(goName) {};
-    };
+public:
+    int id;
+    GoID goId;
+    std::vector<GoID> parentGoIds;
+    size_t nParents;
+    std::string goName;
+    // size_t rankIdx;
+    // size_t nameIdx;
+
+    GoNode() {};
+
+    // GoNode(int id, GoID goId, GoID parentGoIds, size_t nParents, std::string goName)
+    //         : id(id), goId(goId), parentGoIds(parentGoIds), nParents(nParents), goName(goName) {};
+    GoNode(int id, GoID goId, const std::vector<GoID>& parentGoIds, size_t nParents, const std::string &goName)
+    : id(id), goId(goId), parentGoIds(parentGoIds), nParents(nParents), goName(goName) {}
+};
 
 
 class GeneOntology {
@@ -32,6 +34,8 @@ public:
     static GeneOntology* openFuncDb(const std::string &database);
     GeneOntology(const std::string &fileName);
     ~GeneOntology();
+    const GoNode* getGo(GoID id) const;
+    const std::string getLineage(GoID id) const;
 
     // TaxonNode const * LCA(const std::vector<TaxID>& taxa) const;
     // TaxID LCA(TaxID taxonA, TaxID taxonB) const;
@@ -63,6 +67,7 @@ private:
     // size_t loadMerged(const std::string &mergedFile);
     // void loadNames(std::vector<TaxonNode> &tmpNodes, const std::string &namesFile);
     void loadGo(std::vector<GoNode> tmpNodes, const std::string &goFile);
+    std::unordered_map<GoID, GoNode> goMap;
     // void elh(std::vector<std::vector<TaxID>> const & children, int node, int level, std::vector<int> &tmpE, std::vector<int> &tmpL);
     // void computeSparseTable();
     // int nodeId(TaxID taxId) const;

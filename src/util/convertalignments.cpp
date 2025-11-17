@@ -97,6 +97,7 @@ qcov        Fraction of query sequence covered by alignment
 tcov        Fraction of target sequence covered by alignment
 qset        Query set
 tset        Target set
+go          Gene Ontology of the target
  */
 
 std::map<unsigned int, unsigned int> readKeyToSet(const std::string& file) {
@@ -423,15 +424,20 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                 }
 
                 size_t tHeaderId = tDbrHeader->sequenceReader->getId(res.dbKey);
-                size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
-                if (tGoId == UINT_MAX) {
-                    continue;
-                }
-                // std::cout << tGoId << std::endl;
-                const char *tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
-                size_t tGoLen = tGoDbr->sequenceReader->getSeqLen(tGoId);
+                
+                const char *tGo = NULL;
+                size_t tGoLen = 0;
+
+                // size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+                // if (tGoId == UINT_MAX) {
+                //     continue;
+                // }
+                // // std::cout << tGoId << std::endl;
                 // const char *tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
-                // std::cout << *tGo << std::endl;
+                // size_t tGoLen = tGoDbr->sequenceReader->getSeqLen(tGoId);
+                // // const char *tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+                // // std::cout << *tGo << std::endl;
+
                 const char *tHeader = tDbrHeader->sequenceReader->getData(tHeaderId, thread_idx);
                 // std::cout << *tHeader << std::endl;
                 size_t tHeaderLen = tDbrHeader->sequenceReader->getSeqLen(tHeaderId);
@@ -503,10 +509,18 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                                 }
                             }
 
-                            std::vector<unsigned int>* goids;
-                            std::string goidStr;
+                            // std::vector<unsigned int>* goids;
+                            // std::string goidStr;
                             
                             if (needFuncMapping) {
+                                size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+                                if (tGoId == UINT_MAX) {
+                                    continue;
+                                }
+                                // std::cout << tGoId << std::endl;
+                                tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+                                tGoLen = tGoDbr->sequenceReader->getSeqLen(tGoId);
+
                                 // Do you know Gene ontology?
                                 // goids = funcMapping->lookup(res.dbKey); // goids is a pointer to std::vector<unsigned int>
                             

@@ -6,6 +6,8 @@
 // #include "sys/mman.h"
 
 #include <fstream>
+#include <unordered_set>
+#include <queue>
 // #include <algorithm>
 // #include <cassert>
 
@@ -89,8 +91,57 @@ GeneOntology::~GeneOntology() {
     // }
 }
 
+const GoNode* GeneOntology::getGo(GoID id) const {
+    auto it = goMap.find(id);
+    if (it != goMap.end()) {
+        return &(it->second);
+    }
+    return nullptr;
+}
+
+const std::string GeneOntology::getLineage(GoID id) const {
+    if (goMap.find(id) == goMap.end()) {
+        return "";
+    }
+
+    std::string lineage;
+    std::unordered_set<GoID> visited;
+    std::queue<GoID> q;
+
+    // 시작 지점의 부모부터 탐색
+    const GoNode &startNode = goMap.at(id);
+    for (GoID parent : startNode.parentGoIds) {
+        q.push(parent);
+        visited.insert(parent);
+    }
+
+    while (!q.empty()) {
+        GoID current = q.front();
+        q.pop();
+
+        // lineage에 추가 (패딩 포함)
+        lineage += "GO:" + std::string(7 - std::to_string(current).length(), '0') + std::to_string(current) + "_";
+
+        auto it = goMap.find(current);
+        if (it != goMap.end()) {
+            for (GoID parent : it->second.parentGoIds) {
+                if (visited.count(parent) == 0) {
+                    q.push(parent);
+                    visited.insert(parent);
+                }
+            }
+        }
+    }
+
+    // 마지막 '_' 제거
+    if (!lineage.empty() && lineage.back() == '_') {
+        lineage.pop_back();
+    }
+
+    return lineage;
+}
 void GeneOntology::loadGo(std::vector<GoNode> tmpNodes, const std::string &goFile) {
-    Debug(Debug::INFO) << "Loading a Gene Ontology file ...";
+    Debug(Debug::INFO) << "Loading a Gene Ontology file ...\n";
     std::ifstream ss(goFile);
     if (ss.fail()) {
         Debug(Debug::ERROR) << "File " << goFile << " not found!\n";
@@ -98,20 +149,105 @@ void GeneOntology::loadGo(std::vector<GoNode> tmpNodes, const std::string &goFil
     }
 
     std::string line;
-    while (std::getline(ss, line)) {
-    //     if (line.find("scientific name") == std::string::npos) {
-    //         continue;
-    //     }
+    int id = 0;
 
-    //     std::pair<int, std::string> entry = parseName(line);
-    //     if (!nodeExists(entry.first)) {
-    //         Debug(Debug::ERROR) << "loadNames: Taxon " << entry.first << " not present in nodes file!\n";
-    //         EXIT(EXIT_FAILURE);
-    //     }
-    //     tmpNodes[nodeId(entry.first)].nameIdx = block->append(entry.second.c_str(), entry.second.size());
+    while (std::getline(ss, line)) {
+        std::stringstream linestream(line);
+        std::string goIdStr, goName, parentStr, goNamespace;
+
+        if (!std::getline(linestream, goIdStr, ',')) continue;
+        if (!std::getline(linestream, goName, ',')) continue;
+        if (!std::getline(linestream, parentStr, ',')) continue;
+        if (!std::getline(linestream, goNamespace)) continue;
+
+        // Convert GO ID to int (strip "GO:" and parse int)
+        GoID goId = std::stoi(goIdStr.substr(3));
+
+        // Split parentStr by ';'
+        std::vector<GoID> parentGoIds;
+        std::stringstream parentss(parentStr);
+        std::string parent;
+        while (std::getline(parentss, parent, ';')) {
+            if (parent.substr(0, 3) == "GO:") {
+                parentGoIds.push_back(std::stoi(parent.substr(3)));
+            }
+        }
+
+        GoNode node(id, goId, parentGoIds, parentGoIds.size(), goName);
+        tmpNodes.push_back(node);
+
+        //         // 👇👇👇 추가된 부분: 출력
+        // std::cout << "GO:" << goId << " " << goName;
+        // if (!parentGoIds.empty()) {
+        //     std::cout << " | Parents: ";
+        //     for (size_t i = 0; i < parentGoIds.size(); ++i) {
+        //         std::cout << "GO:" << parentGoIds[i];
+        //         if (i < parentGoIds.size() - 1) std::cout << ";";
+        //     }
+        // }
+        // std::cout << " | Namespace: " << goNamespace << "\n";
+        goMap[goId] = node;  // ✅ 이 한 줄이 핵심!!
+
+        id++;
     }
-    Debug(Debug::INFO) << " Done\n";
+
+    Debug(Debug::INFO) << "Loaded " << tmpNodes.size() << " GO terms.\n";
 }
+
+// void GeneOntology::loadGo(std::vector<GoNode> tmpNodes, const std::string &goFile) {
+//     Debug(Debug::INFO) << "Loading a Gene Ontology file ...";
+//     std::ifstream ss(goFile);
+//     if (ss.fail()) {
+//         Debug(Debug::ERROR) << "File " << goFile << " not found!\n";
+//         EXIT(EXIT_FAILURE);
+//     }
+
+//     std::string line;
+//     int id = 0;
+
+//     while (std::getline(ss, line)) {
+//         std::stringstream linestream(line);
+//         std::string goIdStr, goName, parentStr, goNamespace;
+
+//         if (!std::getline(linestream, goIdStr, ',')) continue;
+//         if (!std::getline(linestream, goName, ',')) continue;
+//         if (!std::getline(linestream, parentStr, ',')) continue;
+//         if (!std::getline(linestream, goNamespace)) continue;
+
+//         GoID goId = std::stoi(goIdStr.substr(3));
+
+//         std::vector<GoID> parentGoIds;
+//         std::stringstream parentss(parentStr);
+//         std::string parent;
+//         while (std::getline(parentss, parent, ';')) {
+//             if (parent.substr(0, 3) == "GO:") {
+//                 parentGoIds.push_back(std::stoi(parent.substr(3)));
+//             }
+//         }
+
+//         GoNode node(id, goId, parentGoIds, parentGoIds.size(), goName);
+//         tmpNodes.push_back(node);
+//         goMap[goId] = node;
+//         id++;
+//     }
+
+//     Debug(Debug::INFO) << "Loaded " << goMap.size() << " GO terms.\n";
+
+//     // std::string line;
+//     // while (std::getline(ss, line)) {
+//     //     if (line.find("scientific name") == std::string::npos) {
+//     //         continue;
+//     //     }
+
+//     //     std::pair<int, std::string> entry = parseName(line);
+//     //     if (!nodeExists(entry.first)) {
+//     //         Debug(Debug::ERROR) << "loadNames: Taxon " << entry.first << " not present in nodes file!\n";
+//     //         EXIT(EXIT_FAILURE);
+//     //     }
+//     //     tmpNodes[nodeId(entry.first)].nameIdx = block->append(entry.second.c_str(), entry.second.size());
+//     // }
+//     // Debug(Debug::INFO) << " Done\n";
+// }
 
 GeneOntology * GeneOntology::openFuncDb(const std::string &database){
     std::string binFile = database + "_taxonomy";
