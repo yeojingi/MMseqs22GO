@@ -11,6 +11,8 @@
 #include "Matcher.h"
 #include "goparser.h"
 #include "GeneOntology.h"
+#include "Aggregator.h"
+#include "Scorer.h"
 #include <unordered_set>
 
 #include <unordered_map>
@@ -68,70 +70,96 @@ thread_idx = omp_get_thread_num();
     DBReader<unsigned int> alnDbr(par.db3.c_str(), par.db3Index.c_str(), par.threads, DBReader<unsigned int>::USE_INDEX|DBReader<unsigned int>::USE_DATA);
     alnDbr.open(DBReader<unsigned int>::LINEAR_ACCCESS);
 
+
+
     FILE *resultFP = FileUtil::openAndDelete(par.db4.c_str(), "w");
     // fprintf(resultFP, "Hello\n");
 
     FuncReader* funcMapping = NULL;
     IndexReader* tGoDbr = NULL;
     
-    Debug::Progress progress(alnDbr.getSize());
     if (needFuncMapping) {
         // IndexReader fDbr(par.db1, par.threads,  IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
         tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
         std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
         funcMapping = new FuncReader(db2NoIndexName);
     }
-    for (size_t i = 0; i < alnDbr.getSize(); i++) {
-        progress.updateProgress();
-        // fprintf(resultFP, "%d\n", i);
-        const unsigned int queryKey = alnDbr.getDbKey(i);
+
+    EvidenceScore evidenceScore;
+    ScoreAlignments(&alnDbr, &evidenceScore, tGoDbr);
+    std::cout << "Scored" << std::endl;
+
+    // evidenceScore.print();
+
+    // Iterate evidence Score and run aggregateOneQuery and store the GO results for each query
+    Aggregator aggregator;
+    std::cout << "Aggregator" << std::endl;
+    aggregator.aggregateAll(
+        evidenceScore,
+        &qDbrHeader,
+        tGoDbr,
+        thread_idx,
+        resultFP
+    );
+
+    // Debug::Progress progress(alnDbr.getSize());
+    // if (needFuncMapping) {
+    //     // IndexReader fDbr(par.db1, par.threads,  IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
+    //     tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
+    //     std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
+    //     funcMapping = new FuncReader(db2NoIndexName);
+    // }
+    // for (size_t i = 0; i < alnDbr.getSize(); i++) {
+    //     progress.updateProgress();
+    //     // fprintf(resultFP, "%d\n", i);
+    //     const unsigned int queryKey = alnDbr.getDbKey(i);
 
 
-        size_t qHeaderId = qDbrHeader.sequenceReader->getId(queryKey);
-        const char *qHeader = qDbrHeader.sequenceReader->getData(qHeaderId, thread_idx);
-        size_t qHeaderLen = qDbrHeader.sequenceReader->getSeqLen(qHeaderId);
-        std::string queryId = Util::parseFastaHeader(qHeader);
-        queryHeaderBuffer.assign(qHeader, qHeaderLen);
-        qHeader = (char*) queryHeaderBuffer.c_str();
+    //     size_t qHeaderId = qDbrHeader.sequenceReader->getId(queryKey);
+    //     const char *qHeader = qDbrHeader.sequenceReader->getData(qHeaderId, thread_idx);
+    //     size_t qHeaderLen = qDbrHeader.sequenceReader->getSeqLen(qHeaderId);
+    //     std::string queryId = Util::parseFastaHeader(qHeader);
+    //     queryHeaderBuffer.assign(qHeader, qHeaderLen);
+    //     qHeader = (char*) queryHeaderBuffer.c_str();
 
-        char *data = alnDbr.getData(i, thread_idx);
-        int tGoId_max = UINT_MAX;
-        char *tGo_max;
-        size_t tGoLen_max;
-        double eval_min=100;
-        while (*data != '\0') {
-            Matcher::result_t res = Matcher::parseAlignmentRecord(data, true);
-            data = Util::skipLine(data);
+    //     char *data = alnDbr.getData(i, thread_idx);
+    //     int tGoId_max = UINT_MAX;
+    //     char *tGo_max;
+    //     size_t tGoLen_max;
+    //     double eval_min=100;
+    //     while (*data != '\0') {
+    //         Matcher::result_t res = Matcher::parseAlignmentRecord(data, true);
+    //         data = Util::skipLine(data);
 
-            if (res.backtrace.empty() && needBacktrace == true) {
-                Debug(Debug::ERROR) << "Backtrace cigar is missing in the alignment result. Please recompute the alignment with the -a flag.\n"
-                                        "Command: mmseqs align " << par.db1 << " " << par.db2 << " " << par.db3 << " " << "alnNew -a\n";
-                EXIT(EXIT_FAILURE);
-            }
+    //         if (res.backtrace.empty() && needBacktrace == true) {
+    //             Debug(Debug::ERROR) << "Backtrace cigar is missing in the alignment result. Please recompute the alignment with the -a flag.\n"
+    //                                     "Command: mmseqs align " << par.db1 << " " << par.db2 << " " << par.db3 << " " << "alnNew -a\n";
+    //             EXIT(EXIT_FAILURE);
+    //         }
 
-            if (res.eval < eval_min) {
-                eval_min = res.eval;
+    //         if (res.eval < eval_min) {
+    //             eval_min = res.eval;
 
-                // Debug(Debug::ERROR) << res.dbKey << "\n";
-                size_t tHeaderId = tDbrHeader->sequenceReader->getId(res.dbKey);
-                size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
-                if (tGoId == UINT_MAX) {
-                    continue;
-                }
-                // std::cout << tGoId << std::endl;
-                tGo_max = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
-                tGoLen_max = tGoDbr->sequenceReader->getSeqLen(tGoId);
-                tGoId_max = tGoId;
-            }
-        }
-        if (eval_min != 100) {
-            // fprintf(resultFP, "%s\t%s\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str());
-            if (tGoId_max == UINT_MAX) {
-                continue;
-            }
-            fprintf(resultFP, "%s\t%s\t%.4e\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str(), eval_min);
-        }
-    }
+    //             // Debug(Debug::ERROR) << res.dbKey << "\n";
+    //             size_t tHeaderId = tDbrHeader->sequenceReader->getId(res.dbKey);
+    //             size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+    //             if (tGoId == UINT_MAX) {
+    //                 continue;
+    //             }
+    //             // std::cout << tGoId << std::endl;
+    //             tGo_max = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+    //             tGoLen_max = tGoDbr->sequenceReader->getSeqLen(tGoId);
+    //             tGoId_max = tGoId;
+    //         }
+    //     }
+    //     if (eval_min != 100) {
+    //         // fprintf(resultFP, "%s\t%s\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str());
+    //         if (tGoId_max == UINT_MAX) {
+    //             continue;
+    //         }
+    //         fprintf(resultFP, "%s\t%s\t%.4e\n", queryId.c_str(), goParser(tGo_max, tGoLen_max).c_str(), eval_min);
+    //     }
+    // }
     std::cout << "Done" << std::endl;
 //     NcbiTaxonomy *taxDB = NcbiTaxonomy::openTaxonomy(par.db1);
 //     // allow reading any kind of sequence database
@@ -223,6 +251,8 @@ thread_idx = omp_get_thread_num();
 //         Debug(Debug::ERROR) << "Cannot close file " << par.db3 << "\n";
 //         return EXIT_FAILURE;
 //     }
+    // delete evidenceScore;
+    // delete(evidenceScore);
     delete tGoDbr;
     delete funcMapping;
     if (!sameDB) {
