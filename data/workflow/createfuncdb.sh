@@ -44,6 +44,47 @@ END {
 }
 ' "$MAPPINGFILE" "$1.lookup"
 
+
+# Create Gene Ontology graph file (_func_gog)
+if [ -n "$GOOBO" ] && [ -f "$GOOBO" ]; then
+    awk '
+    BEGIN {
+        RS = ""
+        FS = "\n"
+        OFS = ","
+    }
+    {
+        if ($1 != "[Term]") next
+
+        id        = ""
+        name      = ""
+        namespace = ""
+        is_a_ids  = ""
+        obsolete  = 0
+
+        for (i = 2; i <= NF; i++) {
+            line = $i
+
+            if (line ~ /^id: /)             { id        = substr(line, 5) }
+            else if (line ~ /^name: /)      { name      = substr(line, 7) }
+            else if (line ~ /^namespace: /) { namespace = substr(line, 12) }
+            else if (line ~ /^is_obsolete: true/) { obsolete = 1 }
+            else if (line ~ /^is_a: /) {
+                split(line, parts, " ")
+                go_id = parts[2]
+                if (is_a_ids == "")
+                    is_a_ids = go_id
+                else
+                    is_a_ids = is_a_ids ";" go_id
+            }
+        }
+
+        if (obsolete) next
+
+        print id, name, is_a_ids, namespace
+    }
+    ' "$GOOBO" | sort -t',' -k1,1 > "$1_func_gog"
+fi
 # fail() {
 #     echo "Error: $1"
 #     exit 1
