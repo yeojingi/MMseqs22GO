@@ -46,9 +46,45 @@ if [ "$FUNC_MAPPING_MODE" = "0" ]; then
 
 elif [ "$FUNC_MAPPING_MODE" = "1" ]; then
   # Mode 1: query GO qualifier namespace (4-column mapping)
-  # TODO: implement when example mapping file is provided
-  echo "FUNC_MAPPING_MODE=1 is not yet implemented"
-  exit 1
+  # Mapping file columns: $1=query $2=GO $3=qualifier $4=namespace
+  # Stored entry format:  "GO qualifier namespace" (space-separated)
+  awk -v db_name="$1" '
+  BEGIN {
+    outindex=db_name"_func.index";
+    outfile=db_name"_func";
+    outdb=db_name"_func.dbtype";
+    offset=0;
+
+    printf("") > outfile;
+    printf("") > outindex;
+  }
+  FNR==NR {
+    id[$1][$2]=$3" "$4; next
+  }
+
+  $2 in id {
+    size=0;
+    for (key in id[$2]) {
+      if (size > 0) {
+        printf("\n") >> outfile;
+        size = size + 1;
+      }
+      entry=key" "id[$2][key];
+      printf("%s", entry) >> outfile;
+      size=size + length(entry);
+    }
+    printf("\0\n") >> outfile;
+    size=size + 2;
+
+    print $1"\t"offset"\t"size >> outindex;
+    offset = offset+size;
+  }
+
+  END {
+    # Gene Ontology datatype
+    printf("%c%c%c%c",21,0,0,0) > outdb
+  }
+  ' "$MAPPINGFILE" "$1.lookup"
 fi
 
 
