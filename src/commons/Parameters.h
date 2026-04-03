@@ -693,6 +693,9 @@ public:
     // taxonomyreport
     int reportMode;
 
+    // functionreport
+    int policy;
+
     // createfuncdb
     std::string funcMappingFile;
     std::string goObo;
@@ -1054,6 +1057,9 @@ public:
     // taxonomyreport
     PARAMETER(PARAM_REPORT_MODE)
 
+    // functionreport
+    PARAMETER(PARAM_POLICY)
+
     // createfuncdb
     PARAMETER(PARAM_FUNC_MAPPING_FILE)
     PARAMETER(PARAM_GO_OBO)
@@ -1189,6 +1195,7 @@ public:
     std::vector<MMseqsParameter*> easytaxonomy;
     std::vector<MMseqsParameter*> createsubdb;
     std::vector<MMseqsParameter*> renamedbkeys;
+    std::vector<MMseqsParameter*> functionreport;
     std::vector<MMseqsParameter*> createfuncdb;
     std::vector<MMseqsParameter*> createtaxdb;
     std::vector<MMseqsParameter*> profile2pssm;

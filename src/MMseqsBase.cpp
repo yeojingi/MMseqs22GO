@@ -436,7 +436,7 @@ std::vector<Command> baseCommands = {
                 CITATION_TAXONOMY, {{"seqTaxDB", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA|DbType::NEED_TAXONOMY, &DbValidator::taxSequenceDb },
                                                            {"taxResultDB/resultDB/sequenceDB", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA | DbType::VARIADIC,  &DbValidator::taxonomyReportInput },
                                                            {"taxonomyReport",    DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::flatfile }}},
-        {"functionreport",       functionreport,       &par.taxonomyreport,       COMMAND_TAXONOMY | COMMAND_FORMAT_CONVERSION,
+        {"functionreport",       functionreport,       &par.functionreport,       COMMAND_TAXONOMY | COMMAND_FORMAT_CONVERSION,
                 "Hi",
                 NULL,
                 "Jingi Yeo <jingiyeo@snu.ac.kr>",

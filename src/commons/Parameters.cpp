@@ -290,6 +290,7 @@ Parameters::Parameters():
         // taxonomyreport
         PARAM_REPORT_MODE(PARAM_REPORT_MODE_ID, "--report-mode", "Report mode", "Taxonomy report mode 0: Kraken 1: Krona", typeid(int), (void *) &reportMode, "^[0-1]{1}$"),
         // functionreport
+        PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting", typeid(int), (void *) &policy, "^[0-1]{1}$"),
         // createfuncdb
         PARAM_FUNC_MAPPING_FILE(PARAM_FUNC_MAPPING_FILE_ID, "--func-mapping-file", "Function annotation mapping file", "File to map sequence identifier to functional annotation", typeid(std::string), (void *) &funcMappingFile, ""),
         PARAM_GO_OBO(PARAM_GO_OBO_ID, "--go-obo", "Gene Ontology obo file", "File that stores the gene ontology information (.obo)", typeid(std::string), (void *) &goObo, ""),
@@ -1178,6 +1179,11 @@ Parameters::Parameters():
     renamedbkeys.push_back(&PARAM_SUBDB_MODE);
     renamedbkeys.push_back(&PARAM_THREADS);
     renamedbkeys.push_back(&PARAM_V);
+
+    // functionreport
+    functionreport.push_back(&PARAM_POLICY);
+    functionreport.push_back(&PARAM_THREADS);
+    functionreport.push_back(&PARAM_V);
 
     // createfuncdb
     createfuncdb.push_back(&PARAM_FUNC_MAPPING_FILE);
