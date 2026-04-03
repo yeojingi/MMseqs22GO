@@ -3,46 +3,53 @@
 echo "$MAPPINGFILE"
 echo "$1"
 
-awk -v db_name="$1" '
-BEGIN {
-  outindex=db_name"_func.index";
-  outfile=db_name"_func";
-  outdb=db_name"_func.dbtype";
-  offset=0;
+FUNC_MAPPING_MODE="${FUNC_MAPPING_MODE:-0}"
 
-  printf("") > outfile;
-  printf("") > outindex;
-}
-FNR==NR {
-  id[$1][$2]=1; next
-}
+if [ "$FUNC_MAPPING_MODE" = "0" ]; then
+  # Mode 0: query GO (2-column mapping)
+  awk -v db_name="$1" '
+  BEGIN {
+    outindex=db_name"_func.index";
+    outfile=db_name"_func";
+    outdb=db_name"_func.dbtype";
+    offset=0;
 
-$2 in id {
-  size=0;
-  # printf "%s", $1 >> outfile;
-  for (key in id[$2]) {
-    if (size >0) {
-      printf("\n") >> outfile;
-      size = size + 1;
-    }
-    # key=substr(key, 4, length(key))+0;
-    printf("%s", key) >> outfile;
-    size=size + length(key);
-    # printf "\0\n" >> outfile;
-    # size=size + 2;
+    printf("") > outfile;
+    printf("") > outindex;
   }
-  printf("\0\n") >> outfile;
-  size=size + 2;
+  FNR==NR {
+    id[$1][$2]=1; next
+  }
 
-  print $1"\t"offset"\t"size >> outindex;
-  offset = offset+size;
-}
+  $2 in id {
+    size=0;
+    for (key in id[$2]) {
+      if (size >0) {
+        printf("\n") >> outfile;
+        size = size + 1;
+      }
+      printf("%s", key) >> outfile;
+      size=size + length(key);
+    }
+    printf("\0\n") >> outfile;
+    size=size + 2;
 
-END {
-  # Gene Ontology datatype
-  printf("%c%c%c%c",21,0,0,0) > outdb 
-}
-' "$MAPPINGFILE" "$1.lookup"
+    print $1"\t"offset"\t"size >> outindex;
+    offset = offset+size;
+  }
+
+  END {
+    # Gene Ontology datatype
+    printf("%c%c%c%c",21,0,0,0) > outdb
+  }
+  ' "$MAPPINGFILE" "$1.lookup"
+
+elif [ "$FUNC_MAPPING_MODE" = "1" ]; then
+  # Mode 1: query GO qualifier namespace (4-column mapping)
+  # TODO: implement when example mapping file is provided
+  echo "FUNC_MAPPING_MODE=1 is not yet implemented"
+  exit 1
+fi
 
 
 # Create Gene Ontology graph file (_func_gog)

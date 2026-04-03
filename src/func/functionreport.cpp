@@ -35,13 +35,13 @@ thread_idx = omp_get_thread_num();
     queryHeaderBuffer.reserve(1024);
 
     Parameters &par = Parameters::getInstance();
+    par.parseParameters(argc, argv, command, true, 0, 0);
+
     bool needFuncMapping = true;
     bool needBacktrace = false;
 
     const bool touch = (par.preloadMode != Parameters::PRELOAD_MODE_MMAP);
     const bool sameDB = par.db1.compare(par.db2) == 0 ? true : false;
-
-    par.parseParameters(argc, argv, command, true, 0, 0);
     
     GeneOntology go(par.db2 + "_func_gog");
     // std::cout << go.getLineage(1) << std::endl;

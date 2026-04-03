@@ -39,6 +39,7 @@ int createfuncdb(int argc, const char **argv, const Command& command) {
     cmd.addVariable("MAPPINGMODE", SSTR(par.taxMappingMode).c_str());
     cmd.addVariable("DBMODE", SSTR(par.taxDbMode).c_str());
     cmd.addVariable("GOOBO", SSTR(par.goObo).c_str());
+    cmd.addVariable("FUNC_MAPPING_MODE", SSTR(par.funcMappingMode).c_str());
     // if (par.ncbiTaxDump.empty()) {
     //     cmd.addVariable("DOWNLOAD_NCBITAXDUMP", "1");
     // }else{
