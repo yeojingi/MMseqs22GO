@@ -1,53 +1,79 @@
 #include "Aggregator.h"
 #include <map>
+#include <cstring>
 #include "Parameters.h"
 #include "IndexReader.h"
 #include "Scorer.h"
 #include "Util.h"
-#include "goparser.h"
 
-std::pair<std::string, float> Aggregator::aggregateOneQuery(const std::map<size_t, float>* scores, IndexReader* tGoDbr) {
-    Parameters &par = Parameters::getInstance();
+// _func 엔트리에서 GO term 목록 파싱 (newline 구분, 각 줄 첫 토큰만)
+static void parseGoTerms(const char* data, size_t len, std::vector<std::string>& terms) {
+    const char* ptr = data;
+    const char* end = data + len;
+    while (ptr < end) {
+        const char* nl = (const char*)memchr(ptr, '\n', end - ptr);
+        size_t lineLen = nl ? (size_t)(nl - ptr) : (size_t)(end - ptr);
+        if (lineLen > 0) {
+            const char* sp = (const char*)memchr(ptr, ' ', lineLen);
+            size_t goLen = sp ? (size_t)(sp - ptr) : lineLen;
+            terms.push_back(std::string(ptr, goLen));
+        }
+        if (!nl) break;
+        ptr = nl + 1;
+    }
+}
 
-    if (par.policy == 0) {
-        // Policy 0: best e-value — score is always 1.0
+std::vector<std::pair<std::string, float>> Aggregator::aggregateOneQuery(
+    const std::map<size_t, float>* scores,
+    IndexReader* tGoDbr,
+    unsigned int thread_idx)
+{
+    std::vector<std::pair<std::string, float>> result;
+    int policy = Parameters::getInstance().policy;
+
+    if (policy == 0) {
+        // best e-value target의 모든 GO → score 1.0
         size_t bestTarget = UINT_MAX;
         float minEvalue = std::numeric_limits<float>::max();
-        for (const auto& entry : *scores) {
-            if (entry.second < minEvalue) {
-                minEvalue = entry.second;
-                bestTarget = entry.first;
+        for (std::map<size_t, float>::const_iterator it = scores->begin(); it != scores->end(); ++it) {
+            if (it->second < minEvalue) {
+                minEvalue = it->second;
+                bestTarget = it->first;
             }
         }
-        if (bestTarget == UINT_MAX) {
-            return {"", 1.0f};
-        }
-        char* goData = tGoDbr->sequenceReader->getData(bestTarget, 0);
+        if (bestTarget == UINT_MAX) return result;
+
+        char* goData = tGoDbr->sequenceReader->getData(bestTarget, thread_idx);
         size_t goLen  = tGoDbr->sequenceReader->getSeqLen(bestTarget);
-        return {goParser(goData, goLen), 1.0f};
+
+        std::vector<std::string> terms;
+        parseGoTerms(goData, goLen, terms);
+        for (size_t i = 0; i < terms.size(); i++) {
+            result.push_back(std::make_pair(terms[i], 1.0f));
+        }
 
     } else {
-        // Policy 1: voting — count votes per targetId, return winner GO + ratio
-        std::map<size_t, size_t> voteCounts;
-        for (const auto& entry : *scores) {
-            voteCounts[entry.first]++;
-        }
-        size_t bestTarget = UINT_MAX;
-        size_t maxVotes = 0;
-        for (const auto& entry : voteCounts) {
-            if (entry.second > maxVotes) {
-                maxVotes = entry.second;
-                bestTarget = entry.first;
+        // voting: 모든 target의 GO term 카운팅 → score = count / total
+        std::map<std::string, unsigned int> counts;
+        unsigned int total = 0;
+        for (std::map<size_t, float>::const_iterator it = scores->begin(); it != scores->end(); ++it) {
+            char* goData = tGoDbr->sequenceReader->getData(it->first, thread_idx);
+            size_t goLen  = tGoDbr->sequenceReader->getSeqLen(it->first);
+            std::vector<std::string> terms;
+            parseGoTerms(goData, goLen, terms);
+            for (size_t i = 0; i < terms.size(); i++) {
+                counts[terms[i]]++;
             }
+            total++;
         }
-        if (bestTarget == UINT_MAX) {
-            return {"", 0.0f};
+        if (total == 0) return result;
+        for (std::map<std::string, unsigned int>::const_iterator it = counts.begin(); it != counts.end(); ++it) {
+            float score = (float)it->second / (float)total;
+            result.push_back(std::make_pair(it->first, score));
         }
-        float ratio = static_cast<float>(maxVotes) / static_cast<float>(scores->size());
-        char* goData = tGoDbr->sequenceReader->getData(bestTarget, 0);
-        size_t goLen  = tGoDbr->sequenceReader->getSeqLen(bestTarget);
-        return {goParser(goData, goLen), ratio};
     }
+
+    return result;
 }
 
 void Aggregator::aggregateAll(
@@ -57,30 +83,28 @@ void Aggregator::aggregateAll(
     unsigned int thread_idx,
     FILE* resultFP)
 {
-    for (const auto& [queryId, scores] : evidenceScores) {
+    typedef std::map<unsigned int, std::map<size_t, float>>::const_iterator EvidenceIt;
+    for (EvidenceIt qit = evidenceScores.begin(); qit != evidenceScores.end(); ++qit) {
+        unsigned int queryId = qit->first;
+        const std::map<size_t, float>& scores = qit->second;
 
-        // 1. Query header 읽기
         size_t qHeaderId = qDbrHeader->sequenceReader->getId(queryId);
-        const char* qHeader =
-            qDbrHeader->sequenceReader->getData(qHeaderId, thread_idx);
+        const char* qHeader = qDbrHeader->sequenceReader->getData(qHeaderId, thread_idx);
+        std::string queryIdStr = Util::parseFastaHeader(qHeader);
 
-        size_t qHeaderLen =
-            qDbrHeader->sequenceReader->getSeqLen(qHeaderId);
+        std::vector<std::pair<std::string, float>> goScores =
+            aggregateOneQuery(&scores, (IndexReader*)tGoDbr, thread_idx);
 
-        std::string queryIdStr =
-            Util::parseFastaHeader(qHeader);
-
-        // 2. aggregate target → {GO terms, score}
-        auto [goTerms, score] =
-            aggregateOneQuery(&scores, (IndexReader*)tGoDbr);
-
-        // 3. target이 없으면 빈 줄 출력
-        if (goTerms.empty()) {
+        if (goScores.empty()) {
             fprintf(resultFP, "%s\t\n", queryIdStr.c_str());
             continue;
         }
 
-        // 4. 출력
-        fprintf(resultFP, "%s\t%s\t%.4f\n", queryIdStr.c_str(), goTerms.c_str(), score);
+        for (size_t i = 0; i < goScores.size(); i++) {
+            fprintf(resultFP, "%s\t%s\t%.2f\n",
+                queryIdStr.c_str(),
+                goScores[i].first.c_str(),
+                goScores[i].second);
+        }
     }
 }
