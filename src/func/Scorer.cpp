@@ -16,7 +16,8 @@ void ScoreAlignments(DBReader<unsigned int>* alnDbr, EvidenceScore* evidenceScor
         while (*data != '\0') {
             Matcher::result_t res = Matcher::parseAlignmentRecord(data, true);
             data = Util::skipLine(data);
-            size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey); // ensure target exists
+            size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+            if (tGoId == UINT_MAX) continue; // GO annotation 없는 target 제외
             evidenceScore->addScore(queryKey, tGoId, res.eval);
         }
     }
