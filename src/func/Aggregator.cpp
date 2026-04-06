@@ -1,25 +1,53 @@
 #include "Aggregator.h"
 #include <map>
+#include "Parameters.h"
 #include "IndexReader.h"
 #include "Scorer.h"
 #include "Util.h"
 #include "goparser.h"
 
-size_t Aggregator::aggregateOneQuery(const std::map<size_t, float>* scores, IndexReader* tGoDbr) {
-    size_t aggregatedResult = UINT_MAX;
+std::pair<std::string, float> Aggregator::aggregateOneQuery(const std::map<size_t, float>* scores, IndexReader* tGoDbr) {
+    Parameters &par = Parameters::getInstance();
 
-    // Choose the smallest evalue among all scores as an example
-    float minEvalue = std::numeric_limits<float>::max();
-    for (const auto& entry : *scores) {
-        size_t targetId = entry.first;
-        float evalue = entry.second;
-        if (evalue < minEvalue) {
-            minEvalue = evalue;
-            aggregatedResult = targetId;
+    if (par.policy == 0) {
+        // Policy 0: best e-value — score is always 1.0
+        size_t bestTarget = UINT_MAX;
+        float minEvalue = std::numeric_limits<float>::max();
+        for (const auto& entry : *scores) {
+            if (entry.second < minEvalue) {
+                minEvalue = entry.second;
+                bestTarget = entry.first;
+            }
         }
-    }
+        if (bestTarget == UINT_MAX) {
+            return {"", 1.0f};
+        }
+        char* goData = tGoDbr->sequenceReader->getData(bestTarget, 0);
+        size_t goLen  = tGoDbr->sequenceReader->getSeqLen(bestTarget);
+        return {goParser(goData, goLen), 1.0f};
 
-    return aggregatedResult;
+    } else {
+        // Policy 1: voting — count votes per targetId, return winner GO + ratio
+        std::map<size_t, size_t> voteCounts;
+        for (const auto& entry : *scores) {
+            voteCounts[entry.first]++;
+        }
+        size_t bestTarget = UINT_MAX;
+        size_t maxVotes = 0;
+        for (const auto& entry : voteCounts) {
+            if (entry.second > maxVotes) {
+                maxVotes = entry.second;
+                bestTarget = entry.first;
+            }
+        }
+        if (bestTarget == UINT_MAX) {
+            return {"", 0.0f};
+        }
+        float ratio = static_cast<float>(maxVotes) / static_cast<float>(scores->size());
+        char* goData = tGoDbr->sequenceReader->getData(bestTarget, 0);
+        size_t goLen  = tGoDbr->sequenceReader->getSeqLen(bestTarget);
+        return {goParser(goData, goLen), ratio};
+    }
 }
 
 void Aggregator::aggregateAll(
@@ -42,26 +70,17 @@ void Aggregator::aggregateAll(
         std::string queryIdStr =
             Util::parseFastaHeader(qHeader);
 
-        // 2. aggregate target
-        size_t aggregatedTargetId =
+        // 2. aggregate target → {GO terms, score}
+        auto [goTerms, score] =
             aggregateOneQuery(&scores, (IndexReader*)tGoDbr);
 
         // 3. target이 없으면 빈 줄 출력
-        if (aggregatedTargetId == UINT_MAX) {
+        if (goTerms.empty()) {
             fprintf(resultFP, "%s\t\n", queryIdStr.c_str());
             continue;
         }
 
-        // 4. GO terms 읽기
-        char* tGoData =
-            tGoDbr->sequenceReader->getData(aggregatedTargetId, thread_idx);
-
-        size_t tGoLen =
-            tGoDbr->sequenceReader->getSeqLen(aggregatedTargetId);
-
-        std::string goTerms = goParser(tGoData, tGoLen);
-
-        // 5. 출력
-        fprintf(resultFP, "%s\t%s\n", queryIdStr.c_str(), goTerms.c_str());
+        // 4. 출력
+        fprintf(resultFP, "%s\t%s\t%.4f\n", queryIdStr.c_str(), goTerms.c_str(), score);
     }
 }
