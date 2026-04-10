@@ -695,6 +695,7 @@ public:
 
     // functionreport
     int policy;
+    int funcFormatMode;
 
     // createfuncdb
     std::string funcMappingFile;
@@ -1060,6 +1061,7 @@ public:
 
     // functionreport
     PARAMETER(PARAM_POLICY)
+    PARAMETER(PARAM_FUNC_FORMAT_MODE)
 
     // createfuncdb
     PARAMETER(PARAM_FUNC_MAPPING_FILE)

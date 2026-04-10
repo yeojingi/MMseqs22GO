@@ -291,6 +291,7 @@ Parameters::Parameters():
         PARAM_REPORT_MODE(PARAM_REPORT_MODE_ID, "--report-mode", "Report mode", "Taxonomy report mode 0: Kraken 1: Krona", typeid(int), (void *) &reportMode, "^[0-1]{1}$"),
         // functionreport
         PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting", typeid(int), (void *) &policy, "^[0-1]{1}$"),
+        PARAM_FUNC_FORMAT_MODE(PARAM_FUNC_FORMAT_MODE_ID, "--func-out-mode", "Function output mode", "Output format: 0: cava-evaluator (TSV with header), 1: HTML", typeid(int), (void *) &funcFormatMode, "^[0-1]{1}$"),
         // createfuncdb
         PARAM_FUNC_MAPPING_FILE(PARAM_FUNC_MAPPING_FILE_ID, "--func-mapping-file", "Function annotation mapping file", "File to map sequence identifier to functional annotation", typeid(std::string), (void *) &funcMappingFile, ""),
         PARAM_GO_OBO(PARAM_GO_OBO_ID, "--go-obo", "Gene Ontology obo file", "File that stores the gene ontology information (.obo)", typeid(std::string), (void *) &goObo, ""),
@@ -1183,6 +1184,7 @@ Parameters::Parameters():
 
     // functionreport
     functionreport.push_back(&PARAM_POLICY);
+    functionreport.push_back(&PARAM_FUNC_FORMAT_MODE);
     functionreport.push_back(&PARAM_THREADS);
     functionreport.push_back(&PARAM_V);
 
@@ -2671,6 +2673,10 @@ void Parameters::setDefaults() {
 
     // taxonomyreport
     reportMode = 0;
+
+    // functionreport
+    policy = 0;
+    funcFormatMode = 0;
 
     // expandaln
     expansionMode = EXPAND_TRANSFER_EVALUE;

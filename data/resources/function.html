@@ -1,10 +1,258 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
+  <title>Function Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; color: #2d3436; }
+
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 16px 24px;
+      font-size: 1.2em;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      background: white;
+      border-bottom: 1px solid #dfe6e9;
+    }
+
+    #controls input[type="text"] {
+      flex: 1;
+      max-width: 360px;
+      padding: 7px 12px;
+      border: 1px solid #b2bec3;
+      border-radius: 4px;
+      font-size: 0.9em;
+      outline: none;
+    }
+    #controls input[type="text"]:focus { border-color: #0984e3; }
+
+    #controls label { font-size: 0.85em; color: #636e72; display: flex; align-items: center; gap: 6px; }
+    #controls select {
+      padding: 6px 10px;
+      border: 1px solid #b2bec3;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    #summary {
+      padding: 8px 24px;
+      font-size: 0.82em;
+      color: #636e72;
+      background: #f5f6fa;
+    }
+
+    #table-container {
+      padding: 16px 24px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      font-size: 0.9em;
+    }
+
+    thead th {
+      background: #2c3e50;
+      color: white;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { background: #3d5166; }
+    thead th .sort-icon { margin-left: 4px; opacity: 0.6; font-size: 0.8em; }
+
+    tbody tr { border-bottom: 1px solid #f0f0f0; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f0f7ff; }
+
+    /* group header rows */
+    tr.group-header td {
+      background: #dfe6e9;
+      font-weight: 600;
+      padding: 7px 14px;
+      font-size: 0.85em;
+      color: #2c3e50;
+      cursor: pointer;
+    }
+    tr.group-header td:first-child::before {
+      content: "▼ ";
+      font-size: 0.75em;
+    }
+    tr.group-header.collapsed td:first-child::before {
+      content: "▶ ";
+    }
+
+    td { padding: 8px 14px; vertical-align: middle; }
+
+    .go-term {
+      font-family: monospace;
+      color: #0984e3;
+      font-size: 0.88em;
+    }
+
+    .score-cell { min-width: 140px; }
+    .score-bar-bg {
+      background: #f0f0f0;
+      border-radius: 3px;
+      height: 12px;
+      width: 100px;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    .score-bar {
+      background: #0984e3;
+      border-radius: 3px;
+      height: 100%;
+      transition: width 0.2s;
+    }
+    .score-bar.high  { background: #00b894; }
+    .score-bar.mid   { background: #fdcb6e; }
+    .score-bar.low   { background: #e17055; }
+
+    .score-val { font-size: 0.85em; vertical-align: middle; }
+
+    .no-results { padding: 32px; text-align: center; color: #b2bec3; font-size: 0.95em; }
+  </style>
 </head>
 <body>
-  Hi
-</body>
-</html>
+  <header>Function Report — GO Term Annotation</header>
+
+  <div id="controls">
+    <input type="text" id="search" placeholder="Search query or GO term…" oninput="applyFilters()">
+    <label>
+      Min score:
+      <input type="number" id="minScore" value="0" min="0" max="1" step="0.05"
+             style="width:70px; padding:6px 8px; border:1px solid #b2bec3; border-radius:4px; font-size:0.9em;"
+             oninput="applyFilters()">
+    </label>
+    <label>
+      Group by query:
+      <input type="checkbox" id="groupByQuery" checked onchange="render(currentData)">
+    </label>
+  </div>
+
+  <div id="summary"></div>
+  <div id="table-container"></div>
+
+  <script>
+    var currentData = [];
+
+    function scoreClass(s) {
+      if (s >= 0.7) return 'high';
+      if (s >= 0.4) return 'mid';
+      return 'low';
+    }
+
+    function scoreBar(score) {
+      var pct = Math.round(score * 100);
+      return '<span class="score-bar-bg"><span class="score-bar ' + scoreClass(score) + '" style="width:' + pct + '%"></span></span>'
+           + '<span class="score-val">' + score.toFixed(3) + '</span>';
+    }
+
+    function applyFilters() {
+      var q  = document.getElementById('search').value.trim().toLowerCase();
+      var ms = parseFloat(document.getElementById('minScore').value) || 0;
+      var filtered = currentData.filter(function(row) {
+        return row.score >= ms
+            && (row.query.toLowerCase().includes(q) || row.go.toLowerCase().includes(q));
+      });
+      renderTable(filtered);
+    }
+
+    function render(data) {
+      currentData = data;
+      applyFilters();
+    }
+
+    function renderTable(rows) {
+      var container = document.getElementById('table-container');
+      var summary   = document.getElementById('summary');
+      var groupMode = document.getElementById('groupByQuery').checked;
+
+      summary.textContent = rows.length + ' result(s)';
+
+      if (rows.length === 0) {
+        container.innerHTML = '<div class="no-results">No results match the current filter.</div>';
+        return;
+      }
+
+      var html = '<table>';
+      html += '<thead><tr>'
+            + '<th>Query</th>'
+            + '<th>GO Term</th>'
+            + '<th>Score</th>'
+            + '</tr></thead><tbody>';
+
+      if (groupMode) {
+        // group by query
+        var groups = {};
+        var order  = [];
+        rows.forEach(function(r) {
+          if (!groups[r.query]) { groups[r.query] = []; order.push(r.query); }
+          groups[r.query].push(r);
+        });
+
+        order.forEach(function(q) {
+          var grpRows = groups[q];
+          // sort by score desc within group
+          grpRows.sort(function(a, b) { return b.score - a.score; });
+
+          html += '<tr class="group-header" onclick="toggleGroup(this)">'
+                + '<td colspan="3">' + escHtml(q) + ' (' + grpRows.length + ' terms)</td>'
+                + '</tr>';
+          grpRows.forEach(function(r) {
+            html += '<tr class="group-row">'
+                  + '<td></td>'
+                  + '<td class="go-term">' + escHtml(r.go) + '</td>'
+                  + '<td class="score-cell">' + scoreBar(r.score) + '</td>'
+                  + '</tr>';
+          });
+        });
+      } else {
+        rows.forEach(function(r) {
+          html += '<tr>'
+                + '<td>' + escHtml(r.query) + '</td>'
+                + '<td class="go-term">' + escHtml(r.go) + '</td>'
+                + '<td class="score-cell">' + scoreBar(r.score) + '</td>'
+                + '</tr>';
+        });
+      }
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function toggleGroup(headerRow) {
+      headerRow.classList.toggle('collapsed');
+      var next = headerRow.nextElementSibling;
+      while (next && next.classList.contains('group-row')) {
+        next.style.display = headerRow.classList.contains('collapsed') ? 'none' : '';
+        next = next.nextElementSibling;
+      }
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+  <script>render([

@@ -22,7 +22,8 @@ public:
       const IndexReader*,
       const IndexReader*,
       unsigned int thread_idx,
-      FILE*
+      FILE*,
+      int formatMode
   );
 };
 

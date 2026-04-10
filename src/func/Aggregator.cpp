@@ -81,9 +81,15 @@ void Aggregator::aggregateAll(
     const IndexReader* qDbrHeader,
     const IndexReader* tGoDbr,
     unsigned int thread_idx,
-    FILE* resultFP)
+    FILE* resultFP,
+    int formatMode)
 {
+    if (formatMode == 0) {
+        fprintf(resultFP, "query\tprediction\tscore\n");
+    }
+
     typedef std::map<unsigned int, std::map<size_t, float>>::const_iterator EvidenceIt;
+    bool firstRow = true;
     for (EvidenceIt qit = evidenceScores.begin(); qit != evidenceScores.end(); ++qit) {
         unsigned int queryId = qit->first;
         const std::map<size_t, float>& scores = qit->second;
@@ -95,16 +101,27 @@ void Aggregator::aggregateAll(
         std::vector<std::pair<std::string, float>> goScores =
             aggregateOneQuery(&scores, (IndexReader*)tGoDbr, thread_idx);
 
-        if (goScores.empty()) {
-            fprintf(resultFP, "%s\t\n", queryIdStr.c_str());
-            continue;
-        }
-
-        for (size_t i = 0; i < goScores.size(); i++) {
-            fprintf(resultFP, "%s\t%s\t%.2f\n",
-                queryIdStr.c_str(),
-                goScores[i].first.c_str(),
-                goScores[i].second);
+        if (formatMode == 1) {
+            // JSON row: {"query":"...","go":"...","score":0.00}
+            for (size_t i = 0; i < goScores.size(); i++) {
+                if (!firstRow) fprintf(resultFP, ",\n");
+                fprintf(resultFP, "{\"query\":\"%s\",\"go\":\"%s\",\"score\":%.3f}",
+                    queryIdStr.c_str(),
+                    goScores[i].first.c_str(),
+                    goScores[i].second);
+                firstRow = false;
+            }
+        } else {
+            if (goScores.empty()) {
+                fprintf(resultFP, "%s\t\n", queryIdStr.c_str());
+                continue;
+            }
+            for (size_t i = 0; i < goScores.size(); i++) {
+                fprintf(resultFP, "%s\t%s\t%.2f\n",
+                    queryIdStr.c_str(),
+                    goScores[i].first.c_str(),
+                    goScores[i].second);
+            }
         }
     }
 }

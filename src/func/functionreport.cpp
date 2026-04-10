@@ -62,9 +62,15 @@ thread_idx = omp_get_thread_num();
     std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
     FuncReader* funcMapping = new FuncReader(db2NoIndexName);
 
+    const int formatMode = par.funcFormatMode;
+
     EvidenceScore evidenceScore;
     ScoreAlignments(&alnDbr, &evidenceScore, tGoDbr);
     std::cout << "Scored" << std::endl;
+
+    if (formatMode == 1) {
+        fwrite(function_html, 1, function_html_len, resultFP);
+    }
 
     Aggregator aggregator;
     aggregator.aggregateAll(
@@ -72,8 +78,13 @@ thread_idx = omp_get_thread_num();
         &qDbrHeader,
         tGoDbr,
         thread_idx,
-        resultFP
+        resultFP,
+        formatMode
     );
+
+    if (formatMode == 1) {
+        fprintf(resultFP, "]);</script>");
+    }
 
     std::cout << "Done" << std::endl;
 
