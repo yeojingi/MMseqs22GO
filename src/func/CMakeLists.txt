@@ -4,6 +4,7 @@ set(func_header_files
         func/goparser.h
         func/Scorer.h
         func/Aggregator.h
+        func/GoEnrichment.h
         PARENT_SCOPE
         )
 set(func_source_files
@@ -13,5 +14,6 @@ set(func_source_files
         func/functionreport.cpp
         func/Scorer.cpp
         func/Aggregator.cpp
+        func/goenrich.cpp
         PARENT_SCOPE
         )

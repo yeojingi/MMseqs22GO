@@ -291,7 +291,10 @@ Parameters::Parameters():
         PARAM_REPORT_MODE(PARAM_REPORT_MODE_ID, "--report-mode", "Report mode", "Taxonomy report mode 0: Kraken 1: Krona", typeid(int), (void *) &reportMode, "^[0-1]{1}$"),
         // functionreport
         PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting", typeid(int), (void *) &policy, "^[0-1]{1}$"),
-        PARAM_FUNC_FORMAT_MODE(PARAM_FUNC_FORMAT_MODE_ID, "--func-out-mode", "Function output mode", "Output format: 0: cava-evaluator (TSV with header), 1: HTML", typeid(int), (void *) &funcFormatMode, "^[0-1]{1}$"),
+        PARAM_FUNC_FORMAT_MODE(PARAM_FUNC_FORMAT_MODE_ID, "--func-out-mode", "Function output mode", "Output format: 0: cava-evaluator (TSV with header), 1: HTML, 2: formatted_ids", typeid(int), (void *) &funcFormatMode, "^[0-2]{1}$"),
+        // goenrich
+        PARAM_ENRICH_PVALUE(PARAM_ENRICH_PVALUE_ID, "--enrich-pvalue", "Enrichment p-value cutoff", "Adjusted p-value cutoff for GO enrichment output (0.0 = output all)", typeid(double), (void *) &enrichPvalue, "^0(\\.[0-9]+)?$|^1(\\.0+)?$"),
+        PARAM_ENRICH_DB(PARAM_ENRICH_DB_ID, "--enrich-db", "Enrichment DB path", "Path to precomputed GO enrichment DB (goenrich output) to embed in HTML", typeid(std::string), (void *) &enrichDb, ""),
         // createfuncdb
         PARAM_FUNC_MAPPING_FILE(PARAM_FUNC_MAPPING_FILE_ID, "--func-mapping-file", "Function annotation mapping file", "File to map sequence identifier to functional annotation", typeid(std::string), (void *) &funcMappingFile, ""),
         PARAM_GO_OBO(PARAM_GO_OBO_ID, "--go-obo", "Gene Ontology obo file", "File that stores the gene ontology information (.obo)", typeid(std::string), (void *) &goObo, ""),
@@ -1185,8 +1188,14 @@ Parameters::Parameters():
     // functionreport
     functionreport.push_back(&PARAM_POLICY);
     functionreport.push_back(&PARAM_FUNC_FORMAT_MODE);
+    functionreport.push_back(&PARAM_ENRICH_DB);
     functionreport.push_back(&PARAM_THREADS);
     functionreport.push_back(&PARAM_V);
+
+    // goenrich
+    goenrich.push_back(&PARAM_ENRICH_PVALUE);
+    goenrich.push_back(&PARAM_THREADS);
+    goenrich.push_back(&PARAM_V);
 
     // createfuncdb
     createfuncdb.push_back(&PARAM_FUNC_MAPPING_FILE);
@@ -2677,6 +2686,10 @@ void Parameters::setDefaults() {
     // functionreport
     policy = 0;
     funcFormatMode = 0;
+
+    // goenrich
+    enrichPvalue = 0.05;
+    enrichDb = "";
 
     // expandaln
     expansionMode = EXPAND_TRANSFER_EVALUE;

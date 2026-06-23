@@ -697,6 +697,10 @@ public:
     int policy;
     int funcFormatMode;
 
+    // goenrich
+    double enrichPvalue;
+    std::string enrichDb;
+
     // createfuncdb
     std::string funcMappingFile;
     std::string goObo;
@@ -1063,6 +1067,10 @@ public:
     PARAMETER(PARAM_POLICY)
     PARAMETER(PARAM_FUNC_FORMAT_MODE)
 
+    // goenrich
+    PARAMETER(PARAM_ENRICH_PVALUE)
+    PARAMETER(PARAM_ENRICH_DB)
+
     // createfuncdb
     PARAMETER(PARAM_FUNC_MAPPING_FILE)
     PARAMETER(PARAM_GO_OBO)
@@ -1200,6 +1208,7 @@ public:
     std::vector<MMseqsParameter*> createsubdb;
     std::vector<MMseqsParameter*> renamedbkeys;
     std::vector<MMseqsParameter*> functionreport;
+    std::vector<MMseqsParameter*> goenrich;
     std::vector<MMseqsParameter*> createfuncdb;
     std::vector<MMseqsParameter*> createtaxdb;
     std::vector<MMseqsParameter*> profile2pssm;

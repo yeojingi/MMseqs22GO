@@ -17,15 +17,14 @@ public:
     std::vector<GoID> parentGoIds;
     size_t nParents;
     std::string goName;
+    std::string category; // biological_process, molecular_function, cellular_component
     // size_t rankIdx;
     // size_t nameIdx;
 
     GoNode() {};
 
-    // GoNode(int id, GoID goId, GoID parentGoIds, size_t nParents, std::string goName)
-    //         : id(id), goId(goId), parentGoIds(parentGoIds), nParents(nParents), goName(goName) {};
-    GoNode(int id, GoID goId, const std::vector<GoID>& parentGoIds, size_t nParents, const std::string &goName)
-    : id(id), goId(goId), parentGoIds(parentGoIds), nParents(nParents), goName(goName) {}
+    GoNode(int id, GoID goId, const std::vector<GoID>& parentGoIds, size_t nParents, const std::string &goName, const std::string &category = "")
+    : id(id), goId(goId), parentGoIds(parentGoIds), nParents(nParents), goName(goName), category(category) {}
 };
 
 

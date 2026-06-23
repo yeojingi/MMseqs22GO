@@ -173,7 +173,7 @@ void GeneOntology::loadGo(std::vector<GoNode> tmpNodes, const std::string &goFil
             }
         }
 
-        GoNode node(id, goId, parentGoIds, parentGoIds.size(), goName);
+        GoNode node(id, goId, parentGoIds, parentGoIds.size(), goName, goNamespace);
         tmpNodes.push_back(node);
 
         //         // 👇👇👇 추가된 부분: 출력
@@ -225,7 +225,7 @@ void GeneOntology::loadGo(std::vector<GoNode> tmpNodes, const std::string &goFil
 //             }
 //         }
 
-//         GoNode node(id, goId, parentGoIds, parentGoIds.size(), goName);
+//         GoNode node(id, goId, parentGoIds, parentGoIds.size(), goName, goNamespace);
 //         tmpNodes.push_back(node);
 //         goMap[goId] = node;
 //         id++;

@@ -82,6 +82,7 @@ void Aggregator::aggregateAll(
     const IndexReader* tGoDbr,
     unsigned int thread_idx,
     FILE* resultFP,
+    FILE* formattedIdsFP,
     int formatMode)
 {
     if (formatMode == 0) {
@@ -101,6 +102,7 @@ void Aggregator::aggregateAll(
         std::vector<std::pair<std::string, float>> goScores =
             aggregateOneQuery(&scores, (IndexReader*)tGoDbr, thread_idx);
 
+        // Mode 0 and 1: write to resultFP (TSV or JSON)
         if (formatMode == 1) {
             // JSON row: {"query":"...","go":"...","score":0.00}
             for (size_t i = 0; i < goScores.size(); i++) {
@@ -111,7 +113,8 @@ void Aggregator::aggregateAll(
                     goScores[i].second);
                 firstRow = false;
             }
-        } else {
+        } else if (formatMode == 0) {
+            // TSV format (mode 0)
             if (goScores.empty()) {
                 fprintf(resultFP, "%s\t\n", queryIdStr.c_str());
                 continue;
@@ -121,6 +124,35 @@ void Aggregator::aggregateAll(
                     queryIdStr.c_str(),
                     goScores[i].first.c_str(),
                     goScores[i].second);
+            }
+        }
+        
+        // Mode 2: write formatted_ids output
+        // query_id<tab>target_ids_semicolon_separated<tab>scores_semicolon_separated
+        if ((formatMode == 2 || formattedIdsFP) && !scores.empty()) {
+            FILE* targetFP = (formatMode == 2) ? resultFP : formattedIdsFP;
+            if (targetFP) {
+                fprintf(targetFP, "%s", queryIdStr.c_str());
+                
+                // Write all target IDs separated by semicolon for field2
+                fprintf(targetFP, "\t");
+                int targetIdx = 0;
+                for (std::map<size_t, float>::const_iterator it = scores.begin(); it != scores.end(); ++it) {
+                    if (targetIdx > 0) fprintf(targetFP, ";");
+                    fprintf(targetFP, "%zu", it->first);
+                    targetIdx++;
+                }
+                
+                // Write all scores separated by semicolon for field3
+                fprintf(targetFP, "\t");
+                int scoreIdx = 0;
+                for (std::map<size_t, float>::const_iterator it = scores.begin(); it != scores.end(); ++it) {
+                    if (scoreIdx > 0) fprintf(targetFP, ";");
+                    fprintf(targetFP, "%.2f", it->second);
+                    scoreIdx++;
+                }
+                
+                fprintf(targetFP, "\n");
             }
         }
     }

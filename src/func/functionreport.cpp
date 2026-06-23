@@ -15,6 +15,12 @@
 #include "Scorer.h"
 #include <unordered_set>
 #include <unordered_map>
+#include <algorithm>
+#include <cstring>
+#include <cstdlib>
+#include <climits>
+#include <unistd.h>
+#include <map>
 
 #include "function.html.h"
 
@@ -28,26 +34,25 @@ unsigned int thread_idx = 0;
 #ifdef OPENMP
 thread_idx = omp_get_thread_num();
 #endif
-    std::string queryHeaderBuffer;
-    queryHeaderBuffer.reserve(1024);
 
     Parameters &par = Parameters::getInstance();
     par.parseParameters(argc, argv, command, true, 0, 0);
 
+    const int formatMode = par.funcFormatMode;
     const bool touch = (par.preloadMode != Parameters::PRELOAD_MODE_MMAP);
     const bool sameDB = par.db1.compare(par.db2) == 0 ? true : false;
 
     GeneOntology go(par.db2 + "_func_gog");
 
-    int dbaccessMode = DBReader<unsigned int>::USE_INDEX;
-    IndexReader qDbr(par.db1, par.threads,  IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
-    IndexReader qDbrHeader(par.db1, par.threads, IndexReader::SRC_HEADERS , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0);
+    const int dbaccessMode = DBReader<unsigned int>::USE_INDEX;
+    IndexReader qDbr(par.db1, par.threads, IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
+    IndexReader qDbrHeader(par.db1, par.threads, IndexReader::SRC_HEADERS, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0);
 
     IndexReader *tDbr;
     IndexReader *tDbrHeader;
     if (sameDB) {
         tDbr = &qDbr;
-        tDbrHeader= &qDbrHeader;
+        tDbrHeader = &qDbrHeader;
     } else {
         tDbr = new IndexReader(par.db2, par.threads, IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
         tDbrHeader = new IndexReader(par.db2, par.threads, IndexReader::SRC_HEADERS, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0);
@@ -56,17 +61,134 @@ thread_idx = omp_get_thread_num();
     DBReader<unsigned int> alnDbr(par.db3.c_str(), par.db3Index.c_str(), par.threads, DBReader<unsigned int>::USE_INDEX|DBReader<unsigned int>::USE_DATA);
     alnDbr.open(DBReader<unsigned int>::LINEAR_ACCCESS);
 
-    FILE *resultFP = FileUtil::openAndDelete(par.db4.c_str(), "w");
-
-    IndexReader* tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO , (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
+    IndexReader* tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
     std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
     FuncReader* funcMapping = new FuncReader(db2NoIndexName);
-
-    const int formatMode = par.funcFormatMode;
 
     EvidenceScore evidenceScore;
     ScoreAlignments(&alnDbr, &evidenceScore, tGoDbr);
     std::cout << "Scored" << std::endl;
+
+    if (formatMode == 2) {
+        // lookup: query entry(string) -> numericId
+        std::map<std::string, unsigned int> queryLookup;
+
+        typedef std::map<unsigned int, std::map<size_t, float>>::const_iterator EvidenceIt;
+        for (EvidenceIt qit = evidenceScore.begin(); qit != evidenceScore.end(); ++qit) {
+            unsigned int queryNumId = qit->first;
+            size_t qHeaderId = qDbrHeader.sequenceReader->getId(queryNumId);
+            const char* qHeader = qDbrHeader.sequenceReader->getData(qHeaderId, thread_idx);
+            std::string queryStr = Util::parseFastaHeader(qHeader);
+            queryLookup[queryStr] = queryNumId;
+        }
+
+        // --- Write .html file ---
+        auto jsEscape = [](const std::string& s) -> std::string {
+            std::string out;
+            out.reserve(s.size());
+            for (size_t i = 0; i < s.size(); i++) {
+                if (s[i] == '\\' || s[i] == '"') out += '\\';
+                out += s[i];
+            }
+            return out;
+        };
+
+        std::string gogFilePath = par.db2 + "_func_gog";
+
+        // GOG path as server-root-relative URL (for python -m http.server)
+        std::string gogUrlPath = "/" + gogFilePath;
+        std::string htmlPath = par.db4 + ".html";
+        FILE* htmlFP = FileUtil::openAndDelete(htmlPath.c_str(), "w");
+
+        // Find /* INJECT_DATA */ placeholder in function_html template
+        static const char INJECT_MARKER[] = "/* INJECT_DATA */";
+        const size_t MARKER_LEN = sizeof(INJECT_MARKER) - 1;
+        const char* html = (const char*)function_html;
+        size_t html_len = (size_t)function_html_len;
+        const char* inject_pos = nullptr;
+        for (size_t i = 0; i + MARKER_LEN <= html_len; i++) {
+            if (memcmp(html + i, INJECT_MARKER, MARKER_LEN) == 0) {
+                inject_pos = html + i;
+                break;
+            }
+        }
+
+        // Write template up to placeholder
+        if (inject_pos) {
+            fwrite(html, 1, (size_t)(inject_pos - html), htmlFP);
+        }
+
+        // paths — all absolute
+        // Note: argv[0] here is the first DB arg (Application.cpp dispatches argv+2).
+        // The real binary path is stored in the MMSEQS env var by Application.cpp.
+        char mmseqsAbsBuf[PATH_MAX];
+        const char* mmseqsEnv = getenv("MMSEQS");
+        std::string mmseqsPath = mmseqsEnv ? std::string(mmseqsEnv) : "";
+        if (!mmseqsPath.empty() && realpath(mmseqsPath.c_str(), mmseqsAbsBuf) != nullptr)
+            mmseqsPath = std::string(mmseqsAbsBuf);
+
+        char cwdBuf[PATH_MAX];
+        std::string cwd = (getcwd(cwdBuf, PATH_MAX) != nullptr) ? std::string(cwdBuf) : ".";
+
+        auto toAbs = [&](const std::string& p) -> std::string {
+            if (!p.empty() && p[0] == '/') return p;
+            return cwd + "/" + p;
+        };
+
+        // Inject dynamic data (PATHS, GOG_PATH, TOTAL_COUNT, IDS_PATH, ENRICH_DB_PATH)
+        std::string enrichDbAbs = par.enrichDb.empty() ? "" : toAbs(par.enrichDb);
+        fprintf(htmlFP,
+            "const PATHS = {query:\"%s\", target:\"%s\", aln:\"%s\", mmseqs:\"%s\", cwd:\"%s\"};\n"
+            "const GOG_PATH = \"%s\";\n"
+            "const TOTAL_COUNT = %zu;\n"
+            "const IDS_PATH = \"%s\";\n"
+            "const ENRICH_DB_PATH = \"%s\";\n",
+            jsEscape(toAbs(par.db1)).c_str(),
+            jsEscape(toAbs(par.db2)).c_str(),
+            jsEscape(toAbs(par.db3)).c_str(),
+            jsEscape(mmseqsPath).c_str(),
+            jsEscape(cwd).c_str(),
+            jsEscape(gogUrlPath).c_str(),
+            queryLookup.size(),
+            jsEscape(toAbs(par.db4 + "_ids")).c_str(),
+            jsEscape(enrichDbAbs).c_str()
+        );
+
+        // Write rest of template after placeholder
+        if (inject_pos) {
+            const char* after = inject_pos + MARKER_LEN;
+            fwrite(after, 1, html_len - (size_t)(after - html), htmlFP);
+        }
+
+        fclose(htmlFP);
+
+        // write _ids: entry\tnumeric_id sorted by entry (map already sorted)
+        std::string idsPath = par.db4 + "_ids";
+        FILE* idsFP = FileUtil::openAndDelete(idsPath.c_str(), "w");
+        for (auto it = queryLookup.begin(); it != queryLookup.end(); ++it) {
+            fprintf(idsFP, "%s\t%u\n", it->first.c_str(), it->second);
+        }
+        fclose(idsFP);
+
+        std::cout << "Done\n"
+                  << "  HTML:  " << htmlPath << "\n"
+                  << "  IDs:   " << idsPath << "\n"
+                  << "To view, run: python3 /path/to/m2g/server.py 8080\n"
+                  << "Then open:   http://localhost:8080/" << htmlPath << "\n";
+        delete tGoDbr;
+        delete funcMapping;
+        if (!sameDB) {
+            delete tDbr;
+            delete tDbrHeader;
+        }
+        alnDbr.close();
+        return EXIT_SUCCESS;
+    }
+
+    // Mode 0 and 1
+    FILE *resultFP = FileUtil::openAndDelete(par.db4.c_str(), "w");
+    std::string formattedIdsPath = par.db4 + "_formatted_ids";
+    FILE *formattedIdsFP = FileUtil::openAndDelete(formattedIdsPath.c_str(), "w");
 
     if (formatMode == 1) {
         fwrite(function_html, 1, function_html_len, resultFP);
@@ -79,6 +201,7 @@ thread_idx = omp_get_thread_num();
         tGoDbr,
         thread_idx,
         resultFP,
+        formattedIdsFP,
         formatMode
     );
 
@@ -87,7 +210,8 @@ thread_idx = omp_get_thread_num();
     }
 
     std::cout << "Done" << std::endl;
-
+    if (resultFP) fclose(resultFP);
+    if (formattedIdsFP) fclose(formattedIdsFP);
     delete tGoDbr;
     delete funcMapping;
     if (!sameDB) {
