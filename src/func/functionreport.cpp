@@ -97,7 +97,10 @@ thread_idx = omp_get_thread_num();
 
         // GOG path as server-root-relative URL (for python -m http.server)
         std::string gogUrlPath = "/" + gogFilePath;
-        std::string htmlPath = par.db4 + ".html";
+        std::string db4Base = par.db4;
+        if (db4Base.size() >= 5 && db4Base.substr(db4Base.size() - 5) == ".html")
+            db4Base = db4Base.substr(0, db4Base.size() - 5);
+        std::string htmlPath = db4Base + ".html";
         FILE* htmlFP = FileUtil::openAndDelete(htmlPath.c_str(), "w");
 
         // Find /* INJECT_DATA */ placeholder in function_html template
@@ -163,7 +166,7 @@ thread_idx = omp_get_thread_num();
         fclose(htmlFP);
 
         // write _ids: entry\tnumeric_id sorted by entry (map already sorted)
-        std::string idsPath = par.db4 + "_ids";
+        std::string idsPath = db4Base + "_ids";
         FILE* idsFP = FileUtil::openAndDelete(idsPath.c_str(), "w");
         for (auto it = queryLookup.begin(); it != queryLookup.end(); ++it) {
             fprintf(idsFP, "%s\t%u\n", it->first.c_str(), it->second);
