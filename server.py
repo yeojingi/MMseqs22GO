@@ -55,4 +55,4 @@ if __name__ == '__main__':
     os.chdir(os.getcwd())
     print(f'Serving at http://localhost:{PORT}')
     print(f'Run from: {os.getcwd()}')
-    http.server.test(HandlerClass=Handler, port=PORT, bind='localhost')
+    http.server.test(HandlerClass=Handler, port=PORT, bind='127.0.0.1')
