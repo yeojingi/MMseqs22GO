@@ -1053,9 +1053,15 @@ function onGogLoaded(text) {
   loadSummary();
 }
 
-fetch(GOG_PATH)
-  .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-  .then(onGogLoaded)
+fetch('/api/run', {
+  method: 'POST', headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({cmd: `cat "${GOG_PATH}"`, cwd: PATHS.cwd})
+})
+  .then(r => r.json())
+  .then(d => {
+    if (!d.output || d.output.startsWith('[Error]')) throw new Error(d.output || 'empty');
+    onGogLoaded(d.output);
+  })
   .catch(() => {
     status.textContent = 'Cannot auto-load GOG (' + GOG_PATH + '): select manually';
     status.className = 'err';

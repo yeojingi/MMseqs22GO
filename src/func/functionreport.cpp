@@ -95,8 +95,7 @@ thread_idx = omp_get_thread_num();
 
         std::string gogFilePath = par.db2 + "_func_gog";
 
-        // GOG path as server-root-relative URL (for python -m http.server)
-        std::string gogUrlPath = "/" + gogFilePath;
+        std::string gogUrlPath = gogFilePath;
         std::string db4Base = par.db4;
         if (db4Base.size() >= 5 && db4Base.substr(db4Base.size() - 5) == ".html")
             db4Base = db4Base.substr(0, db4Base.size() - 5);
