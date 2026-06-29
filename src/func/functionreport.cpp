@@ -152,7 +152,7 @@ thread_idx = omp_get_thread_num();
             jsEscape(cwd).c_str(),
             jsEscape(gogUrlPath).c_str(),
             queryLookup.size(),
-            jsEscape(toAbs(par.db4 + "_ids")).c_str(),
+            jsEscape(toAbs(db4Base + "_ids")).c_str(),
             jsEscape(enrichDbAbs).c_str()
         );
 
