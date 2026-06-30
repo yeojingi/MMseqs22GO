@@ -396,6 +396,7 @@ document.addEventListener('mousemove', e => {
     rangeCountEl.style.top  = (e.clientY - 22) + 'px';
   }
 });
+document.addEventListener('mouseup', () => { rangeCountEl.style.display = 'none'; });
 
 function countInRange(vals, lo, hi) {
   return vals.filter(v => v >= lo && v <= hi).length;
@@ -610,37 +611,10 @@ async function loadPage(page) {
     const data = await resp.json();
     list.innerHTML = '';
     const entries = data.output.split('\n').filter(l => l.trim()).map(l => {
-      const p = l.split('\t'); return {qid: p[0], numId: parseInt(p[1])};
+      const p = l.split('\t'); return {qid: p[0], numId: parseInt(p[1]), prot: p[2] || ''};
     });
 
-    // batch-fetch all protein names from {query}_h
-    let protNames = {};
-    const validEntries = entries.filter(e => !isNaN(e.numId));
-    if (validEntries.length) {
-      const ids = validEntries.map(e => e.numId).join(',');
-      try {
-        const hr = await fetch('/api/run', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({cmd: `${PATHS.mmseqs} view ${PATHS.query}_h --id-list ${ids}`, cwd: PATHS.cwd})
-        });
-        const hd = await hr.json();
-        // strip any [stderr] tail that server.py appends
-        const rawStr = hd.output.split('\n[stderr]')[0];
-        // mmseqs view _h may use \0 or \n as entry separator depending on DB type
-        const raw = rawStr.includes('\0')
-          ? rawStr.split('\0').map(s => s.trim()).filter((_, i) => i < validEntries.length)
-          : rawStr.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-        validEntries.forEach((e, i) => {
-          const hdr = raw[i] || '';
-          const clean = hdr.replace(/^>/, '');
-          const sp = clean.indexOf(' ');
-          protNames[e.qid] = sp >= 0 ? clean.slice(sp + 1).trim() : clean;
-        });
-      } catch(_) { /* protein names unavailable, show empty */ }
-    }
-
-    for (const {qid, numId} of entries) {
-      const prot = protNames[qid] || '';
+    for (const {qid, numId, prot} of entries) {
       const el = document.createElement('div');
       el.className = 'item' + (qid === activeEntry ? ' active' : '');
 

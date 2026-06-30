@@ -164,11 +164,21 @@ thread_idx = omp_get_thread_num();
 
         fclose(htmlFP);
 
-        // write _ids: entry\tnumeric_id sorted by entry (map already sorted)
+        // write _ids: entry\tnumeric_id\tprotein_name sorted by entry (map already sorted)
         std::string idsPath = db4Base + "_ids";
         FILE* idsFP = FileUtil::openAndDelete(idsPath.c_str(), "w");
         for (auto it = queryLookup.begin(); it != queryLookup.end(); ++it) {
-            fprintf(idsFP, "%s\t%u\n", it->first.c_str(), it->second);
+            size_t qHeaderId = qDbrHeader.sequenceReader->getId(it->second);
+            const char* qHeader = qDbrHeader.sequenceReader->getData(qHeaderId, thread_idx);
+            std::string fullHeader(qHeader);
+            std::string protName;
+            size_t sp = fullHeader.find(' ');
+            if (sp != std::string::npos) {
+                protName = fullHeader.substr(sp + 1);
+                while (!protName.empty() && (protName.back() == '\n' || protName.back() == '\r' || protName.back() == ' '))
+                    protName.pop_back();
+            }
+            fprintf(idsFP, "%s\t%u\t%s\n", it->first.c_str(), it->second, protName.c_str());
         }
         fclose(idsFP);
 
