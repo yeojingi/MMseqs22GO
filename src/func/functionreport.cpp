@@ -39,6 +39,7 @@ thread_idx = omp_get_thread_num();
     par.parseParameters(argc, argv, command, true, 0, 0);
 
     const int formatMode = par.funcFormatMode;
+    const bool devMode = par.devMode;
     const bool touch = (par.preloadMode != Parameters::PRELOAD_MODE_MMAP);
     const bool sameDB = par.db1.compare(par.db2) == 0 ? true : false;
 
@@ -64,6 +65,12 @@ thread_idx = omp_get_thread_num();
     IndexReader* tGoDbr = new IndexReader(par.db2, par.threads, IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
     std::string db2NoIndexName = PrefilteringIndexReader::dbPathWithoutIndex(par.db2);
     FuncReader* funcMapping = new FuncReader(db2NoIndexName);
+
+    // dev-mode: open query's _func DB to read query GO annotations
+    IndexReader* qGoDbr = nullptr;
+    if (devMode) {
+        qGoDbr = new IndexReader(par.db1, par.threads, IndexReader::GO, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
+    }
 
     EvidenceScore evidenceScore;
     ScoreAlignments(&alnDbr, &evidenceScore, tGoDbr);
@@ -164,7 +171,7 @@ thread_idx = omp_get_thread_num();
 
         fclose(htmlFP);
 
-        // write _ids: entry\tnumeric_id\tprotein_name sorted by entry (map already sorted)
+        // write _ids: entry\tnumeric_id\tprotein_name[\tquery_go_semicolon_separated]
         std::string idsPath = db4Base + "_ids";
         FILE* idsFP = FileUtil::openAndDelete(idsPath.c_str(), "w");
         for (auto it = queryLookup.begin(); it != queryLookup.end(); ++it) {
@@ -178,7 +185,33 @@ thread_idx = omp_get_thread_num();
                 while (!protName.empty() && (protName.back() == '\n' || protName.back() == '\r' || protName.back() == ' '))
                     protName.pop_back();
             }
-            fprintf(idsFP, "%s\t%u\t%s\n", it->first.c_str(), it->second, protName.c_str());
+            if (devMode && qGoDbr) {
+                size_t goIdx = qGoDbr->sequenceReader->getId(it->second);
+                std::string queryGos;
+                if (goIdx != UINT_MAX) {
+                    char* goData = qGoDbr->sequenceReader->getData(goIdx, thread_idx);
+                    size_t goLen  = qGoDbr->sequenceReader->getSeqLen(goIdx);
+                    const char* ptr = goData;
+                    const char* end = goData + goLen;
+                    bool first = true;
+                    while (ptr < end) {
+                        const char* nl = (const char*)memchr(ptr, '\n', end - ptr);
+                        size_t lineLen = nl ? (size_t)(nl - ptr) : (size_t)(end - ptr);
+                        if (lineLen > 0) {
+                            const char* spc = (const char*)memchr(ptr, ' ', lineLen);
+                            size_t goTermLen = spc ? (size_t)(spc - ptr) : lineLen;
+                            if (!first) queryGos += ';';
+                            queryGos.append(ptr, goTermLen);
+                            first = false;
+                        }
+                        if (!nl) break;
+                        ptr = nl + 1;
+                    }
+                }
+                fprintf(idsFP, "%s\t%u\t%s\t%s\n", it->first.c_str(), it->second, protName.c_str(), queryGos.c_str());
+            } else {
+                fprintf(idsFP, "%s\t%u\t%s\n", it->first.c_str(), it->second, protName.c_str());
+            }
         }
         fclose(idsFP);
 
@@ -188,6 +221,7 @@ thread_idx = omp_get_thread_num();
                   << "To view, run: python3 /path/to/m2g/server.py 8080\n"
                   << "Then open:   http://localhost:8080/" << htmlPath << "\n";
         delete tGoDbr;
+        if (qGoDbr) delete qGoDbr;
         delete funcMapping;
         if (!sameDB) {
             delete tDbr;

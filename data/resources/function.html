@@ -381,6 +381,7 @@ const ENRICH_GLOBAL_PATH = ENRICH_DB_PATH ? ENRICH_DB_PATH + '_global' : '';
 let goInfo = null;
 let cy = null;
 let currentGos = null;
+let currentQueryGos = null;
 let showIntermediate = false;
 let allTargetStats = null;
 let filterDebounce = null;
@@ -611,10 +612,11 @@ async function loadPage(page) {
     const data = await resp.json();
     list.innerHTML = '';
     const entries = data.output.split('\n').filter(l => l.trim()).map(l => {
-      const p = l.split('\t'); return {qid: p[0], numId: parseInt(p[1]), prot: p[2] || ''};
+      const p = l.split('\t');
+      return {qid: p[0], numId: parseInt(p[1]), prot: p[2] || '', queryGos: p[3] ? p[3].split(';').filter(g => g) : []};
     });
 
-    for (const {qid, numId, prot} of entries) {
+    for (const {qid, numId, prot, queryGos} of entries) {
       const el = document.createElement('div');
       el.className = 'item' + (qid === activeEntry ? ' active' : '');
 
@@ -702,7 +704,7 @@ async function loadPage(page) {
           const gos = Object.entries(goCounts).map(([go, n]) => [go, n, goMinEv[go], goMaxBs[go]]);
           if (!goInfo) { alert('GOG not loaded yet \u2014 wait for GO term data'); return; }
           currentGoTargets = goTargets;
-          drawGraph(gos);
+          drawGraph(gos, queryGos);
         } catch(e) {
           alert('[Error] ' + e.message);
         }
@@ -1056,8 +1058,10 @@ document.getElementById('gogFile').onchange = (e) => {
   reader.readAsText(file);
 };
 
-function drawGraph(gos) {
+function drawGraph(gos, queryGos) {
   currentGos = gos;
+  if (queryGos !== undefined) currentQueryGos = queryGos;
+  const queryGoSet = new Set(currentQueryGos || []);
   document.getElementById('empty').style.display = 'none';
   const elems = [];
   const usedNs = new Set();
@@ -1187,6 +1191,53 @@ function drawGraph(gos) {
   });
 
   const tip = document.getElementById('tip');
+
+  // --- dev-mode: highlight query's own GO terms ---
+  if (queryGoSet.size > 0) {
+    // collect all node IDs currently in the graph (target + intermediate)
+    const graphNodeIds = new Set(cy.nodes().map(n => n.id()));
+
+    for (const qgo of queryGoSet) {
+      const inGraph = graphNodeIds.has(qgo);
+      const isIntermediate = inGraph && cy.$(`#${CSS.escape(qgo)}`).data('type') === 'intermediate';
+      const isTarget = inGraph && cy.$(`#${CSS.escape(qgo)}`).data('type') === 'target';
+
+      if (isTarget || isIntermediate) {
+        // already in graph — apply purple border
+        const fill = isIntermediate ? '#ccc' : '#FF8C42';
+        cy.$(`#${CSS.escape(qgo)}`).style({
+          'border-color': '#7B2FBE',
+          'border-width': '3px',
+          'background-color': fill
+        });
+      } else {
+        // not in graph at all — add as "query-only" node with white fill
+        const info = goInfo && goInfo[qgo];
+        if (!info) continue;
+        const root = ROOTS[info.ns];
+        if (!root) continue;
+        const label = info.name.length > 20 ? info.name.slice(0, 18) + '...' : info.name;
+        cy.add([
+          {data: {id: qgo, label, fullName: info.name, type: 'query-only', color: '#fff', ns: info.ns}},
+          {data: {id: `${qgo}->${root.id}`, source: qgo, target: root.id, etype: 't2r'}}
+        ]);
+        cy.$(`#${CSS.escape(qgo)}`).style({
+          'background-color': '#fff',
+          'border-color': '#7B2FBE',
+          'border-width': '3px',
+          'label': label,
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'font-size': '9px',
+          'width': '50px',
+          'height': '50px',
+          'shape': 'round-rectangle',
+          'text-wrap': 'wrap',
+          'text-max-width': '44px'
+        });
+      }
+    }
+  }
 
   // --- helpers for ratio-based node coloring ---
   const ratioBarEl = document.getElementById('ratio-bar');

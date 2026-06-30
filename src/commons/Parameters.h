@@ -696,6 +696,7 @@ public:
     // functionreport
     int policy;
     int funcFormatMode;
+    bool devMode;
 
     // goenrich
     double enrichPvalue;
@@ -1066,6 +1067,7 @@ public:
     // functionreport
     PARAMETER(PARAM_POLICY)
     PARAMETER(PARAM_FUNC_FORMAT_MODE)
+    PARAMETER(PARAM_DEV_MODE)
 
     // goenrich
     PARAMETER(PARAM_ENRICH_PVALUE)
