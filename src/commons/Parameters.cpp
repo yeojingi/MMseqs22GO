@@ -290,9 +290,11 @@ Parameters::Parameters():
         // taxonomyreport
         PARAM_REPORT_MODE(PARAM_REPORT_MODE_ID, "--report-mode", "Report mode", "Taxonomy report mode 0: Kraken 1: Krona", typeid(int), (void *) &reportMode, "^[0-1]{1}$"),
         // functionreport
-        PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting", typeid(int), (void *) &policy, "^[0-1]{1}$"),
+        PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting, 2: BLAST2GO-style GO hierarchy (no evidence code)", typeid(int), (void *) &policy, "^[0-2]{1}$"),
         PARAM_FUNC_FORMAT_MODE(PARAM_FUNC_FORMAT_MODE_ID, "--func-out-mode", "Function output mode", "Output format: 0: cava-evaluator (TSV with header), 1: HTML, 2: formatted_ids", typeid(int), (void *) &funcFormatMode, "^[0-2]{1}$"),
         PARAM_DEV_MODE(PARAM_DEV_MODE_ID, "--dev-mode", "Dev mode", "Show query's own GO annotations in the HTML viewer (requires query_func DB)", typeid(bool), (void *) &devMode, ""),
+        PARAM_GO_WEIGHT(PARAM_GO_WEIGHT_ID, "--go-weight", "GO weight", "Policy 2: weight given to merged child GO terms when abstracting up the GO hierarchy", typeid(float), (void *) &goWeight, "^[0-9]*(\\.[0-9]+)?$"),
+        PARAM_ANNOTATION_CUTOFF(PARAM_ANNOTATION_CUTOFF_ID, "--annotation-cutoff", "Annotation cutoff", "Policy 2: minimum score (similarity + GO weight abstraction) a GO term must reach to be kept", typeid(float), (void *) &annotationCutoff, "^[0-9]*(\\.[0-9]+)?$"),
         // goenrich
         PARAM_ENRICH_PVALUE(PARAM_ENRICH_PVALUE_ID, "--enrich-pvalue", "Enrichment p-value cutoff", "Adjusted p-value cutoff for GO enrichment output (0.0 = output all)", typeid(double), (void *) &enrichPvalue, "^0(\\.[0-9]+)?$|^1(\\.0+)?$"),
         PARAM_ENRICH_DB(PARAM_ENRICH_DB_ID, "--enrich-db", "Enrichment DB path", "Path to precomputed GO enrichment DB (goenrich output) to embed in HTML", typeid(std::string), (void *) &enrichDb, ""),
@@ -1191,6 +1193,8 @@ Parameters::Parameters():
     functionreport.push_back(&PARAM_FUNC_FORMAT_MODE);
     functionreport.push_back(&PARAM_ENRICH_DB);
     functionreport.push_back(&PARAM_DEV_MODE);
+    functionreport.push_back(&PARAM_GO_WEIGHT);
+    functionreport.push_back(&PARAM_ANNOTATION_CUTOFF);
     functionreport.push_back(&PARAM_THREADS);
     functionreport.push_back(&PARAM_V);
 
@@ -2688,6 +2692,8 @@ void Parameters::setDefaults() {
     // functionreport
     policy = 0;
     funcFormatMode = 0;
+    goWeight = 5.0;
+    annotationCutoff = 55.0;
     devMode = false;
 
     // goenrich

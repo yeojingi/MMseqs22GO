@@ -35,6 +35,8 @@ public:
     ~GeneOntology();
     const GoNode* getGo(GoID id) const;
     const std::string getLineage(GoID id) const;
+    // BFS of all ancestors (parents, grandparents, ...) of id, not including id itself
+    std::vector<GoID> getAncestors(GoID id) const;
 
     // TaxonNode const * LCA(const std::vector<TaxID>& taxa) const;
     // TaxID LCA(TaxID taxonA, TaxID taxonB) const;

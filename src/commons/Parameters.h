@@ -697,6 +697,8 @@ public:
     int policy;
     int funcFormatMode;
     bool devMode;
+    float goWeight;
+    float annotationCutoff;
 
     // goenrich
     double enrichPvalue;
@@ -1068,6 +1070,8 @@ public:
     PARAMETER(PARAM_POLICY)
     PARAMETER(PARAM_FUNC_FORMAT_MODE)
     PARAMETER(PARAM_DEV_MODE)
+    PARAMETER(PARAM_GO_WEIGHT)
+    PARAMETER(PARAM_ANNOTATION_CUTOFF)
 
     // goenrich
     PARAMETER(PARAM_ENRICH_PVALUE)

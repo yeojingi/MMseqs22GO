@@ -6,21 +6,28 @@
 #include "IndexReader.h"
 #include "Scorer.h"
 
+class GeneOntology;
 
 class Aggregator {
 public:
   Aggregator() {}
   ~Aggregator() {}
 
+  // simScores/go are only required for policy 2 (BLAST2GO-style); pass nullptr for
+  // policy 0/1.
   std::vector<std::pair<std::string, float>> aggregateOneQuery(
-      const std::map<size_t, float>*,
-      IndexReader*,
+      const std::map<size_t, float>* scores,
+      const std::map<size_t, float>* simScores,
+      IndexReader* tGoDbr,
+      const GeneOntology* go,
       unsigned int thread_idx);
 
   void aggregateAll(
-      const EvidenceScore&,
-      const IndexReader*,
-      const IndexReader*,
+      const EvidenceScore& evidenceScores,
+      const EvidenceScore* simScores,
+      const IndexReader* qDbrHeader,
+      const IndexReader* tGoDbr,
+      const GeneOntology* go,
       unsigned int thread_idx,
       FILE*,
       FILE*,

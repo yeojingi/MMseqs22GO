@@ -5,6 +5,8 @@
 #include "IndexReader.h"
 #include "Scorer.h"
 #include "Util.h"
+#include "GeneOntology.h"
+#include "Blast2Go.h"
 
 // _func 엔트리에서 GO term 목록 파싱 (newline 구분, 각 줄 첫 토큰만)
 static void parseGoTerms(const char* data, size_t len, std::vector<std::string>& terms) {
@@ -25,13 +27,27 @@ static void parseGoTerms(const char* data, size_t len, std::vector<std::string>&
 
 std::vector<std::pair<std::string, float>> Aggregator::aggregateOneQuery(
     const std::map<size_t, float>* scores,
+    const std::map<size_t, float>* simScores,
     IndexReader* tGoDbr,
+    const GeneOntology* go,
     unsigned int thread_idx)
 {
     std::vector<std::pair<std::string, float>> result;
     int policy = Parameters::getInstance().policy;
 
-    if (policy == 0) {
+    if (policy == 2) {
+        if (simScores == NULL || go == NULL) {
+            return result;
+        }
+        Parameters& par = Parameters::getInstance();
+        std::vector<std::pair<GoID, float>> annotated =
+            Blast2Go::annotate(*simScores, tGoDbr, *go, par.goWeight, par.annotationCutoff);
+        for (size_t i = 0; i < annotated.size(); i++) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "GO:%07d", annotated[i].first);
+            result.push_back(std::make_pair(std::string(buf), annotated[i].second));
+        }
+    } else if (policy == 0) {
         // best e-value target의 모든 GO → score 1.0
         size_t bestTarget = UINT_MAX;
         float minEvalue = std::numeric_limits<float>::max();
@@ -78,8 +94,10 @@ std::vector<std::pair<std::string, float>> Aggregator::aggregateOneQuery(
 
 void Aggregator::aggregateAll(
     const EvidenceScore& evidenceScores,
+    const EvidenceScore* simScores,
     const IndexReader* qDbrHeader,
     const IndexReader* tGoDbr,
+    const GeneOntology* go,
     unsigned int thread_idx,
     FILE* resultFP,
     FILE* formattedIdsFP,
@@ -94,13 +112,14 @@ void Aggregator::aggregateAll(
     for (EvidenceIt qit = evidenceScores.begin(); qit != evidenceScores.end(); ++qit) {
         unsigned int queryId = qit->first;
         const std::map<size_t, float>& scores = qit->second;
+        const std::map<size_t, float>* querySimScores = (simScores != NULL) ? simScores->getQueryScores(queryId) : NULL;
 
         size_t qHeaderId = qDbrHeader->sequenceReader->getId(queryId);
         const char* qHeader = qDbrHeader->sequenceReader->getData(qHeaderId, thread_idx);
         std::string queryIdStr = Util::parseFastaHeader(qHeader);
 
         std::vector<std::pair<std::string, float>> goScores =
-            aggregateOneQuery(&scores, (IndexReader*)tGoDbr, thread_idx);
+            aggregateOneQuery(&scores, querySimScores, (IndexReader*)tGoDbr, go, thread_idx);
 
         // Mode 0 and 1: write to resultFP (TSV or JSON)
         if (formatMode == 1) {

@@ -99,12 +99,12 @@ const GoNode* GeneOntology::getGo(GoID id) const {
     return nullptr;
 }
 
-const std::string GeneOntology::getLineage(GoID id) const {
+std::vector<GoID> GeneOntology::getAncestors(GoID id) const {
+    std::vector<GoID> ancestors;
     if (goMap.find(id) == goMap.end()) {
-        return "";
+        return ancestors;
     }
 
-    std::string lineage;
     std::unordered_set<GoID> visited;
     std::queue<GoID> q;
 
@@ -118,9 +118,7 @@ const std::string GeneOntology::getLineage(GoID id) const {
     while (!q.empty()) {
         GoID current = q.front();
         q.pop();
-
-        // lineage에 추가 (패딩 포함)
-        lineage += "GO:" + std::string(7 - std::to_string(current).length(), '0') + std::to_string(current) + "_";
+        ancestors.push_back(current);
 
         auto it = goMap.find(current);
         if (it != goMap.end()) {
@@ -131,6 +129,17 @@ const std::string GeneOntology::getLineage(GoID id) const {
                 }
             }
         }
+    }
+
+    return ancestors;
+}
+
+const std::string GeneOntology::getLineage(GoID id) const {
+    std::vector<GoID> ancestors = getAncestors(id);
+
+    std::string lineage;
+    for (GoID current : ancestors) {
+        lineage += "GO:" + std::string(7 - std::to_string(current).length(), '0') + std::to_string(current) + "_";
     }
 
     // 마지막 '_' 제거

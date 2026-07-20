@@ -13,6 +13,7 @@
 #include "GeneOntology.h"
 #include "Aggregator.h"
 #include "Scorer.h"
+#include "SubstitutionMatrix.h"
 #include <unordered_set>
 #include <unordered_map>
 #include <algorithm>
@@ -75,6 +76,14 @@ thread_idx = omp_get_thread_num();
     EvidenceScore evidenceScore;
     ScoreAlignments(&alnDbr, &evidenceScore, tGoDbr);
     std::cout << "Scored" << std::endl;
+
+    // policy 2 (BLAST2GO-style): needs backtrace-derived similarity instead of e-value
+    EvidenceScore simScore;
+    SubstitutionMatrix* subMat = nullptr;
+    if (par.policy == 2) {
+        subMat = new SubstitutionMatrix(par.scoringMatrixFile.values.aminoacid().c_str(), 2.0, 0.0);
+        ScoreAlignmentsSimilarity(&alnDbr, &simScore, tGoDbr, &qDbr, tDbr, subMat);
+    }
 
     if (formatMode == 2) {
         // lookup: query entry(string) -> numericId
@@ -144,14 +153,17 @@ thread_idx = omp_get_thread_num();
             return cwd + "/" + p;
         };
 
-        // Inject dynamic data (PATHS, GOG_PATH, TOTAL_COUNT, IDS_PATH, ENRICH_DB_PATH)
+        // Inject dynamic data (PATHS, GOG_PATH, TOTAL_COUNT, IDS_PATH, ENRICH_DB_PATH, LCA_PATH)
         std::string enrichDbAbs = par.enrichDb.empty() ? "" : toAbs(par.enrichDb);
+        std::string lcaPath = db4Base + "_lca";
         fprintf(htmlFP,
             "const PATHS = {query:\"%s\", target:\"%s\", aln:\"%s\", mmseqs:\"%s\", cwd:\"%s\"};\n"
             "const GOG_PATH = \"%s\";\n"
             "const TOTAL_COUNT = %zu;\n"
             "const IDS_PATH = \"%s\";\n"
-            "const ENRICH_DB_PATH = \"%s\";\n",
+            "const ENRICH_DB_PATH = \"%s\";\n"
+            "const LCA_PATH = \"%s\";\n"
+            "const DEV_MODE = %s;\n",
             jsEscape(toAbs(par.db1)).c_str(),
             jsEscape(toAbs(par.db2)).c_str(),
             jsEscape(toAbs(par.db3)).c_str(),
@@ -160,7 +172,9 @@ thread_idx = omp_get_thread_num();
             jsEscape(gogUrlPath).c_str(),
             queryLookup.size(),
             jsEscape(toAbs(db4Base + "_ids")).c_str(),
-            jsEscape(enrichDbAbs).c_str()
+            jsEscape(enrichDbAbs).c_str(),
+            jsEscape(toAbs(lcaPath)).c_str(),
+            devMode ? "true" : "false"
         );
 
         // Write rest of template after placeholder
@@ -215,6 +229,46 @@ thread_idx = omp_get_thread_num();
         }
         fclose(idsFP);
 
+        // write _lca: entry\tnumId=lcaRank;numId=lcaRank;...
+        {
+            NcbiTaxonomy* tax = NcbiTaxonomy::openTaxonomy(par.db2);
+            if (tax != nullptr) {
+                MappingReader qMapper(par.db1);
+                MappingReader tMapper(par.db2);
+                FILE* lcaFP = FileUtil::openAndDelete(lcaPath.c_str(), "w");
+                for (EvidenceIt qit = evidenceScore.begin(); qit != evidenceScore.end(); ++qit) {
+                    unsigned int queryNumId = qit->first;
+                    TaxID qTaxId = (TaxID)qMapper.lookup(queryNumId);
+                    size_t qHid = qDbrHeader.sequenceReader->getId(queryNumId);
+                    const char* qHdr = qDbrHeader.sequenceReader->getData(qHid, thread_idx);
+                    std::string qEntry = Util::parseFastaHeader(qHdr);
+                    fprintf(lcaFP, "%s\t", qEntry.c_str());
+                    bool first = true;
+                    for (auto tit = qit->second.begin(); tit != qit->second.end(); ++tit) {
+                        size_t targetInternalIdx = tit->first;
+                        // convert internal index → DB key (what mmseqs view outputs)
+                        unsigned int targetDbKey = tGoDbr->sequenceReader->getDbKey(targetInternalIdx);
+                        TaxID tTaxId = (TaxID)tMapper.lookup(targetDbKey);
+                        const char* rank = "no rank";
+                        if (qTaxId != 0 && tTaxId != 0) {
+                            TaxID lcaTaxId = tax->LCA(qTaxId, tTaxId);
+                            if (lcaTaxId != 0) {
+                                const TaxonNode* node = tax->taxonNode(lcaTaxId, false);
+                                if (node != nullptr)
+                                    rank = tax->getString(node->rankIdx);
+                            }
+                        }
+                        if (!first) fprintf(lcaFP, ";");
+                        fprintf(lcaFP, "%u=%s", targetDbKey, rank);
+                        first = false;
+                    }
+                    fprintf(lcaFP, "\n");
+                }
+                fclose(lcaFP);
+                delete tax;
+            }
+        }
+
         std::cout << "Done\n"
                   << "  HTML:  " << htmlPath << "\n"
                   << "  IDs:   " << idsPath << "\n"
@@ -227,6 +281,7 @@ thread_idx = omp_get_thread_num();
             delete tDbr;
             delete tDbrHeader;
         }
+        if (subMat) delete subMat;
         alnDbr.close();
         return EXIT_SUCCESS;
     }
@@ -243,8 +298,10 @@ thread_idx = omp_get_thread_num();
     Aggregator aggregator;
     aggregator.aggregateAll(
         evidenceScore,
+        (par.policy == 2) ? &simScore : nullptr,
         &qDbrHeader,
         tGoDbr,
+        &go,
         thread_idx,
         resultFP,
         formattedIdsFP,
@@ -258,6 +315,7 @@ thread_idx = omp_get_thread_num();
     std::cout << "Done" << std::endl;
     if (resultFP) fclose(resultFP);
     if (formattedIdsFP) fclose(formattedIdsFP);
+    if (subMat) delete subMat;
     delete tGoDbr;
     delete funcMapping;
     if (!sameDB) {

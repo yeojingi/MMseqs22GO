@@ -5,6 +5,7 @@ set(func_header_files
         func/Scorer.h
         func/Aggregator.h
         func/GoEnrichment.h
+        func/Blast2Go.h
         PARENT_SCOPE
         )
 set(func_source_files
@@ -15,5 +16,6 @@ set(func_source_files
         func/Scorer.cpp
         func/Aggregator.cpp
         func/goenrich.cpp
+        func/Blast2Go.cpp
         PARENT_SCOPE
         )

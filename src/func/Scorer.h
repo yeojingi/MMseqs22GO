@@ -4,6 +4,8 @@
 #include "IndexReader.h"
 #include <map>
 
+class BaseMatrix;
+
 class EvidenceScore {
 public:
   EvidenceScore() {}
@@ -15,7 +17,13 @@ public:
   float getScore(unsigned int query_id, size_t target_id) {
     return aln_scores[query_id][target_id];
   }
-  
+
+  const std::map<size_t, float>* getQueryScores(unsigned int query_id) const {
+    auto it = aln_scores.find(query_id);
+    return (it != aln_scores.end()) ? &(it->second) : nullptr;
+  }
+
+
   auto begin() { return aln_scores.begin(); }
   auto end() { return aln_scores.end(); }
   auto begin() const { return aln_scores.begin(); }
@@ -42,5 +50,10 @@ private:
 };
 
 void ScoreAlignments(DBReader<unsigned int>* , EvidenceScore* , IndexReader* );
+
+// Positives-style (BLAST2GO "similarity") score per hit, computed from the alignment
+// backtrace and a substitution matrix. Requires alnDbr to have been created with -a
+// (backtrace); exits with an error otherwise.
+void ScoreAlignmentsSimilarity(DBReader<unsigned int>* alnDbr, EvidenceScore* simScore, IndexReader* tGoDbr, IndexReader* qDbr, IndexReader* tDbr, BaseMatrix* subMat);
 
 #endif
