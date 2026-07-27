@@ -46,7 +46,11 @@ thread_idx = omp_get_thread_num();
 
     GeneOntology go(par.db2 + "_func_gog");
 
-    const int dbaccessMode = DBReader<unsigned int>::USE_INDEX;
+    // policy 2 needs actual sequence data (to compute backtrace-based similarity);
+    // other policies only ever look at the sequence index.
+    const int dbaccessMode = (par.policy == 2)
+        ? (DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA)
+        : DBReader<unsigned int>::USE_INDEX;
     IndexReader qDbr(par.db1, par.threads, IndexReader::SRC_SEQUENCES, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0, dbaccessMode);
     IndexReader qDbrHeader(par.db1, par.threads, IndexReader::SRC_HEADERS, (touch) ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0);
 
