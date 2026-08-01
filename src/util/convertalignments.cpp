@@ -98,6 +98,8 @@ tcov        Fraction of target sequence covered by alignment
 qset        Query set
 tset        Target set
 go          Gene Ontology of the target
+ppos        Fraction of positive-scoring matches (BLOSUM-positive) among aligned (non-gap) columns
+pposgap     Fraction of positive-scoring matches among all alignment columns, gaps included
  */
 
 std::map<unsigned int, unsigned int> readKeyToSet(const std::string& file) {
@@ -730,6 +732,37 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                                                 }
                                             }
                                             pPositive /= static_cast<float>(matchCount);
+                                        }
+                                        result.append(SSTR(pPositive));
+                                        break;
+                                    }
+                                    case Parameters::OUTFMT_PPOSGAP: {
+                                        float pPositive = 0;
+                                        int alnLen = 0;
+                                        if (res.backtrace.empty() == false) {
+                                            int qPos = res.qStartPos;
+                                            int tPos = res.dbStartPos;
+                                            std::string unpackedBt = Matcher::uncompressAlignment(res.backtrace);
+                                            for (size_t pos = 0; pos < unpackedBt.size(); pos++) {
+                                                switch (unpackedBt[pos]) {
+                                                    case 'M': {
+                                                        char qRes = queryProfile ? queryProfData[qPos] : querySeqData[qPos];
+                                                        char tRes = targetProfile ? targetProfData[tPos] : targetSeqData[tPos];
+                                                        pPositive += (subMat->subMatrix[subMat->aa2num[(int)qRes]][subMat->aa2num[(int)tRes]] > 0);
+                                                        qPos++;
+                                                        tPos++;
+                                                        break;
+                                                    }
+                                                    case 'D':
+                                                        tPos++;
+                                                        break;
+                                                    case 'I':
+                                                        qPos++;
+                                                        break;
+                                                }
+                                            }
+                                            alnLen = static_cast<int>(unpackedBt.size());
+                                            pPositive /= static_cast<float>(alnLen);
                                         }
                                         result.append(SSTR(pPositive));
                                         break;

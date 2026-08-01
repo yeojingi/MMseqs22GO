@@ -188,6 +188,7 @@ public:
     static const int OUTFMT_FIDENT = 39;
     static const int OUTFMT_PPOS = 40;
     static const int OUTFMT_GO = 41;
+    static const int OUTFMT_PPOSGAP = 42;
 
     static const int INDEX_SUBSET_NORMAL = 0;
     static const int INDEX_SUBSET_NO_HEADERS = 1;
