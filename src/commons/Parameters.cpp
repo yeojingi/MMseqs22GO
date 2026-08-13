@@ -301,7 +301,7 @@ Parameters::Parameters():
         // createfuncdb
         PARAM_FUNC_MAPPING_FILE(PARAM_FUNC_MAPPING_FILE_ID, "--func-mapping-file", "Function annotation mapping file", "File to map sequence identifier to functional annotation", typeid(std::string), (void *) &funcMappingFile, ""),
         PARAM_GO_OBO(PARAM_GO_OBO_ID, "--go-obo", "Gene Ontology obo file", "File that stores the gene ontology information (.obo)", typeid(std::string), (void *) &goObo, ""),
-        PARAM_FUNC_MAPPING_MODE(PARAM_FUNC_MAPPING_MODE_ID, "--func-mapping-mode", "Function mapping mode", "Mapping file format: 0: query GO, 1: query GO qualifier namespace", typeid(int), (void *) &funcMappingMode, "^[0-1]{1}$"),
+        PARAM_FUNC_MAPPING_MODE(PARAM_FUNC_MAPPING_MODE_ID, "--func-mapping-mode", "Function mapping mode", "Mapping file format: 0: query GO, 1: query GO qualifier namespace evidenceCode evidence (evidence column optional)", typeid(int), (void *) &funcMappingMode, "^[0-1]{1}$"),
         // createtaxdb
         PARAM_NCBI_TAX_DUMP(PARAM_NCBI_TAX_DUMP_ID, "--ncbi-tax-dump", "NCBI tax dump directory", "NCBI tax dump directory. The tax dump can be downloaded here \"ftp://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz\"", typeid(std::string), (void *) &ncbiTaxDump, ""),
         PARAM_TAX_MAPPING_FILE(PARAM_TAX_MAPPING_FILE_ID, "--tax-mapping-file", "Taxonomy mapping file", "File to map sequence identifier to taxonomical identifier", typeid(std::string), (void *) &taxMappingFile, ""),

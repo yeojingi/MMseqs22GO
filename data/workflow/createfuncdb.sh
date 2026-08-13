@@ -45,9 +45,11 @@ if [ "$FUNC_MAPPING_MODE" = "0" ]; then
   ' "$MAPPINGFILE" "$1.lookup"
 
 elif [ "$FUNC_MAPPING_MODE" = "1" ]; then
-  # Mode 1: query GO qualifier namespace (4-column mapping)
-  # Mapping file columns: $1=query $2=GO $3=qualifier $4=namespace
-  # Stored entry format:  "GO qualifier namespace" (space-separated)
+  # Mode 1: query GO qualifier namespace evidenceCode evidence (5-6 column mapping,
+  # evidence is optional)
+  # Mapping file columns: $1=query $2=GO $3=qualifier $4=namespace $5=evidenceCode $6=evidence (optional)
+  # Stored entry format:  "GO qualifier namespace evidenceCode evidence" (space-separated,
+  # evidence may be empty)
   awk -v db_name="$1" '
   BEGIN {
     outindex=db_name"_func.index";
@@ -59,7 +61,8 @@ elif [ "$FUNC_MAPPING_MODE" = "1" ]; then
     printf("") > outindex;
   }
   FNR==NR {
-    id[$1][$2]=$3" "$4; next
+    evidence=(NF>=6)?$6:"";
+    id[$1][$2]=$3" "$4" "$5" "evidence; next
   }
 
   $2 in id {
