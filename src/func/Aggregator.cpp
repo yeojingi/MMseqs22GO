@@ -1,6 +1,7 @@
 #include "Aggregator.h"
 #include <map>
 #include <cstring>
+#include <algorithm>
 #include "Parameters.h"
 #include "IndexReader.h"
 #include "Scorer.h"
@@ -66,6 +67,33 @@ std::vector<std::pair<std::string, float>> Aggregator::aggregateOneQuery(
         parseGoTerms(goData, goLen, terms);
         for (size_t i = 0; i < terms.size(); i++) {
             result.push_back(std::make_pair(terms[i], 1.0f));
+        }
+
+    } else if (policy == 3) {
+        // k-NN voting: take the k nearest neighbors (lowest e-value), vote among just those
+        int k = Parameters::getInstance().knnK;
+        std::vector<std::pair<float, size_t>> byEvalue;
+        for (std::map<size_t, float>::const_iterator it = scores->begin(); it != scores->end(); ++it) {
+            byEvalue.push_back(std::make_pair(it->second, it->first));
+        }
+        std::sort(byEvalue.begin(), byEvalue.end());
+        size_t kUsed = std::min((size_t)k, byEvalue.size());
+        if (kUsed == 0) return result;
+
+        std::map<std::string, unsigned int> counts;
+        for (size_t i = 0; i < kUsed; i++) {
+            size_t targetIdx = byEvalue[i].second;
+            char* goData = tGoDbr->sequenceReader->getData(targetIdx, thread_idx);
+            size_t goLen  = tGoDbr->sequenceReader->getSeqLen(targetIdx);
+            std::vector<std::string> terms;
+            parseGoTerms(goData, goLen, terms);
+            for (size_t j = 0; j < terms.size(); j++) {
+                counts[terms[j]]++;
+            }
+        }
+        for (std::map<std::string, unsigned int>::const_iterator it = counts.begin(); it != counts.end(); ++it) {
+            float score = (float)it->second / (float)kUsed;
+            result.push_back(std::make_pair(it->first, score));
         }
 
     } else {

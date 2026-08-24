@@ -700,6 +700,7 @@ public:
     bool devMode;
     float goWeight;
     float annotationCutoff;
+    int knnK;
 
     // goenrich
     double enrichPvalue;
@@ -1073,6 +1074,7 @@ public:
     PARAMETER(PARAM_DEV_MODE)
     PARAMETER(PARAM_GO_WEIGHT)
     PARAMETER(PARAM_ANNOTATION_CUTOFF)
+    PARAMETER(PARAM_KNN_K)
 
     // goenrich
     PARAMETER(PARAM_ENRICH_PVALUE)
