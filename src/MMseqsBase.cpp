@@ -459,8 +459,8 @@ std::vector<Command> baseCommands = {
                 NULL,
                 "Jingi Yeo <jingiyeo@snu.ac.kr>",
                 "<i:funcDB> <o:iaReport>",
-                CITATION_TAXONOMY, {{"funcDB",       DbType::ACCESS_MODE_INPUT,  DbType::NEED_DATA, &DbValidator::allDb },
-                                    {"iaReport",     DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::flatfile }}},
+                CITATION_IA, {{"funcDB",       DbType::ACCESS_MODE_INPUT,  DbType::NEED_DATA, &DbValidator::allDb },
+                              {"iaReport",     DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::flatfile }}},
         {"filtertaxdb",          filtertaxdb,          &par.filtertaxdb,          COMMAND_TAXONOMY,
                 "Filter taxonomy result database",
                 "# Download a sequence database with taxonomy information\n"

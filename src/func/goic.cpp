@@ -11,7 +11,10 @@
 #include <cmath>
 #include <cstdio>
 
-// CAFA-style Information Accretion: IA(t) = -log2( P(t) / P(parents(t)) ), where
+// CAFA-style Information Accretion (Clark WT, Radivojac P: Information-theoretic
+// evaluation of predicted ontological annotations. Bioinformatics, 29(13), i53-i61
+// (2013), https://academic.oup.com/bioinformatics/article/29/13/i53/195366):
+// IA(t) = -log2( P(t) / P(parents(t)) ), where
 // P(parents(t)) is the probability that ALL of t's direct parents are annotated
 // simultaneously (true path rule guarantees count(t) <= that joint count for every
 // parent). N cancels out of the ratio, so this only needs raw counts:

@@ -16,6 +16,9 @@ const unsigned int CITATION_GPU      = 1U << 7;
 // citations from inheriting modules will start from here
 const unsigned int CITATION_END      = CITATION_GPU << 1;
 
+// this fork's own additions, starting at CITATION_END
+const unsigned int CITATION_IA       = CITATION_END;
+
 struct MMseqsParameter;
 
 typedef const unsigned int CommandMode;
