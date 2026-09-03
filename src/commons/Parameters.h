@@ -1218,6 +1218,7 @@ public:
     std::vector<MMseqsParameter*> renamedbkeys;
     std::vector<MMseqsParameter*> functionreport;
     std::vector<MMseqsParameter*> goenrich;
+    std::vector<MMseqsParameter*> goic;
     std::vector<MMseqsParameter*> createfuncdb;
     std::vector<MMseqsParameter*> createtaxdb;
     std::vector<MMseqsParameter*> profile2pssm;

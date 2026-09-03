@@ -144,4 +144,5 @@ extern int diskspaceavail(int argc, const char **argv, const Command& command);
 extern int createfuncdb(int argc, const char **argv, const Command& command);
 extern int functionreport(int argc, const char **argv, const Command& command);
 extern int goenrich(int argc, const char **argv, const Command& command);
+extern int goic(int argc, const char **argv, const Command& command);
 #endif

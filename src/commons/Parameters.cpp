@@ -1205,6 +1205,10 @@ Parameters::Parameters():
     goenrich.push_back(&PARAM_THREADS);
     goenrich.push_back(&PARAM_V);
 
+    // goic
+    goic.push_back(&PARAM_THREADS);
+    goic.push_back(&PARAM_V);
+
     // createfuncdb
     createfuncdb.push_back(&PARAM_FUNC_MAPPING_FILE);
     createfuncdb.push_back(&PARAM_GO_OBO);

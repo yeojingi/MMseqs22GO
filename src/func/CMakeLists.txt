@@ -17,5 +17,6 @@ set(func_source_files
         func/Aggregator.cpp
         func/goenrich.cpp
         func/Blast2Go.cpp
+        func/goic.cpp
         PARENT_SCOPE
         )

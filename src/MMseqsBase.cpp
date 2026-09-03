@@ -454,6 +454,13 @@ std::vector<Command> baseCommands = {
                                     {"targetDB",     DbType::ACCESS_MODE_INPUT,  DbType::NEED_DATA, &DbValidator::allDb },
                                     {"alignmentDB",  DbType::ACCESS_MODE_INPUT,  DbType::NEED_DATA, &DbValidator::allDb },
                                     {"enrichDB",     DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::flatfile }}},
+        {"goic",                 goic,                 &par.goic,                 COMMAND_TAXONOMY | COMMAND_FORMAT_CONVERSION,
+                "Compute GO term Information Accretion (IA) from a func-annotated DB's background distribution",
+                NULL,
+                "Jingi Yeo <jingiyeo@snu.ac.kr>",
+                "<i:funcDB> <o:iaReport>",
+                CITATION_TAXONOMY, {{"funcDB",       DbType::ACCESS_MODE_INPUT,  DbType::NEED_DATA, &DbValidator::allDb },
+                                    {"iaReport",     DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::flatfile }}},
         {"filtertaxdb",          filtertaxdb,          &par.filtertaxdb,          COMMAND_TAXONOMY,
                 "Filter taxonomy result database",
                 "# Download a sequence database with taxonomy information\n"
