@@ -96,6 +96,32 @@ std::vector<std::pair<std::string, float>> Aggregator::aggregateOneQuery(
             result.push_back(std::make_pair(it->first, score));
         }
 
+    } else if (policy == 4) {
+        // DiamondScore (DeepGOPlus / NetGO BLAST-KNN):
+        // S(q,t) = Σ_h bitscore(q,h)·1[t∈GO(h)] / Σ_h bitscore(q,h)
+        // simScores carries bitscore per hit (populated by ScoreAlignmentsBitscore)
+        if (simScores == nullptr) return result;
+        double totalBs = 0.0;
+        for (auto& kv : *simScores) totalBs += kv.second;
+        if (totalBs == 0.0) return result;
+
+        std::map<std::string, double> goWeightSum;
+        for (auto& kv : *simScores) {
+            size_t tIdx = kv.first;
+            double bs   = kv.second;
+            char*  goData = tGoDbr->sequenceReader->getData(tIdx, thread_idx);
+            size_t goLen  = tGoDbr->sequenceReader->getSeqLen(tIdx);
+            std::vector<std::string> terms;
+            parseGoTerms(goData, goLen, terms);
+            // deduplicate within this hit so each GO counted once per hit
+            std::sort(terms.begin(), terms.end());
+            terms.erase(std::unique(terms.begin(), terms.end()), terms.end());
+            for (auto& t : terms) goWeightSum[t] += bs;
+        }
+        for (auto& kv : goWeightSum) {
+            result.push_back({kv.first, (float)(kv.second / totalBs)});
+        }
+
     } else {
         // voting: 모든 target의 GO term 카운팅 → score = count / total
         std::map<std::string, unsigned int> counts;

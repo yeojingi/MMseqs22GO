@@ -51,6 +51,9 @@ private:
 
 void ScoreAlignments(DBReader<unsigned int>* , EvidenceScore* , IndexReader* );
 
+// Bitscore per hit (res.score), used for policy 4 (DiamondScore/DeepGOPlus).
+void ScoreAlignmentsBitscore(DBReader<unsigned int>* alnDbr, EvidenceScore* bsScore, IndexReader* tGoDbr);
+
 // Positives-style (BLAST2GO "similarity") score per hit, computed from the alignment
 // backtrace and a substitution matrix. Requires alnDbr to have been created with -a
 // (backtrace); exits with an error otherwise.

@@ -290,7 +290,7 @@ Parameters::Parameters():
         // taxonomyreport
         PARAM_REPORT_MODE(PARAM_REPORT_MODE_ID, "--report-mode", "Report mode", "Taxonomy report mode 0: Kraken 1: Krona", typeid(int), (void *) &reportMode, "^[0-1]{1}$"),
         // functionreport
-        PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting, 2: BLAST2GO-style GO hierarchy (no evidence code), 3: k-NN voting", typeid(int), (void *) &policy, "^[0-3]{1}$"),
+        PARAM_POLICY(PARAM_POLICY_ID, "--policy", "Annotation policy", "Annotation policy: 0: best e-value, 1: voting, 2: BLAST2GO-style GO hierarchy (no evidence code), 3: k-NN voting, 4: DiamondScore weighted voting (DeepGOPlus/NetGO)", typeid(int), (void *) &policy, "^[0-4]{1}$"),
         PARAM_FUNC_FORMAT_MODE(PARAM_FUNC_FORMAT_MODE_ID, "--func-out-mode", "Function output mode", "Output format: 0: cava-evaluator (TSV with header), 1: HTML, 2: formatted_ids", typeid(int), (void *) &funcFormatMode, "^[0-2]{1}$"),
         PARAM_DEV_MODE(PARAM_DEV_MODE_ID, "--dev-mode", "Dev mode", "Show query's own GO annotations in the HTML viewer (requires query_func DB)", typeid(bool), (void *) &devMode, ""),
         PARAM_GO_WEIGHT(PARAM_GO_WEIGHT_ID, "--go-weight", "GO weight", "Policy 2: weight given to merged child GO terms when abstracting up the GO hierarchy", typeid(float), (void *) &goWeight, "^[0-9]*(\\.[0-9]+)?$"),

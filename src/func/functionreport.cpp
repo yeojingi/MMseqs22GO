@@ -81,12 +81,14 @@ thread_idx = omp_get_thread_num();
     ScoreAlignments(&alnDbr, &evidenceScore, tGoDbr);
     std::cout << "Scored" << std::endl;
 
-    // policy 2 (BLAST2GO-style): needs backtrace-derived similarity instead of e-value
+    // policy 2: similarity score; policy 4: bitscore (DiamondScore)
     EvidenceScore simScore;
     SubstitutionMatrix* subMat = nullptr;
     if (par.policy == 2) {
         subMat = new SubstitutionMatrix(par.scoringMatrixFile.values.aminoacid().c_str(), 2.0, 0.0);
         ScoreAlignmentsSimilarity(&alnDbr, &simScore, tGoDbr, &qDbr, tDbr, subMat);
+    } else if (par.policy == 4) {
+        ScoreAlignmentsBitscore(&alnDbr, &simScore, tGoDbr);
     }
 
     if (formatMode == 2) {

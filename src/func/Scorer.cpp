@@ -25,6 +25,23 @@ void ScoreAlignments(DBReader<unsigned int>* alnDbr, EvidenceScore* evidenceScor
     }
 }
 
+void ScoreAlignmentsBitscore(DBReader<unsigned int>* alnDbr, EvidenceScore* bsScore, IndexReader* tGoDbr) {
+    const int thread_idx = 0;
+    Debug::Progress progress(alnDbr->getSize());
+    for (size_t i = 0; i < alnDbr->getSize(); i++) {
+        progress.updateProgress();
+        const unsigned int queryKey = alnDbr->getDbKey(i);
+        char *data = alnDbr->getData(i, thread_idx);
+        while (*data != '\0') {
+            Matcher::result_t res = Matcher::parseAlignmentRecord(data, true);
+            data = Util::skipLine(data);
+            size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
+            if (tGoId == UINT_MAX) continue;
+            bsScore->addScore(queryKey, tGoId, (float)res.score);
+        }
+    }
+}
+
 void ScoreAlignmentsSimilarity(DBReader<unsigned int>* alnDbr, EvidenceScore* simScore, IndexReader* tGoDbr, IndexReader* qDbr, IndexReader* tDbr, BaseMatrix* subMat) {
     const int thread_idx = 0;
     Debug::Progress progress(alnDbr->getSize());
