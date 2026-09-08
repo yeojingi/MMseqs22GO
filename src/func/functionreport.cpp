@@ -304,7 +304,7 @@ thread_idx = omp_get_thread_num();
     Aggregator aggregator;
     aggregator.aggregateAll(
         evidenceScore,
-        (par.policy == 2) ? &simScore : nullptr,
+        (par.policy == 2 || par.policy == 4) ? &simScore : nullptr,
         &qDbrHeader,
         tGoDbr,
         &go,
