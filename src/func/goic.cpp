@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <climits>
 
 // CAFA-style Information Accretion (Clark WT, Radivojac P: Information-theoretic
 // evaluation of predicted ontological annotations. Bioinformatics, 29(13), i53-i61
@@ -34,6 +35,13 @@ int goic(int argc, const char **argv, const Command &command) {
         touch ? (IndexReader::PRELOAD_INDEX | IndexReader::PRELOAD_DATA) : 0,
         DBReader<unsigned int>::USE_INDEX | DBReader<unsigned int>::USE_DATA);
 
+    // _func(_gog) can be a much larger DB reused as-is (e.g. symlinked to a bigger
+    // source DB's _func), so its index can carry entries that aren't actually part of
+    // {db}. Only count entries that are also present in {db}.index.
+    IndexReader baseDbr(par.db1, par.threads, IndexReader::SRC_SEQUENCES,
+        touch ? IndexReader::PRELOAD_INDEX : 0,
+        DBReader<unsigned int>::USE_INDEX);
+
     size_t N = tGoDbr->sequenceReader->getSize();
 
     // postings[t] = sorted sequence indices annotated with t (direct or propagated via
@@ -46,6 +54,9 @@ int goic(int argc, const char **argv, const Command &command) {
     Debug::Progress progress(N);
     for (size_t i = 0; i < N; i++) {
         progress.updateProgress();
+        unsigned int dbKey = tGoDbr->sequenceReader->getDbKey(i);
+        if (baseDbr.sequenceReader->getId(dbKey) == UINT_MAX) continue;
+
         char* data = tGoDbr->sequenceReader->getData(i, thread_idx);
         size_t len = tGoDbr->sequenceReader->getSeqLen(i);
 
