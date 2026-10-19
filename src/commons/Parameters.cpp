@@ -1339,7 +1339,9 @@ Parameters::Parameters():
     searchworkflow.push_back(&PARAM_EXHAUSTIVE_SEARCH_FILTER);
     searchworkflow.push_back(&PARAM_STRAND);
     searchworkflow.push_back(&PARAM_LCA_SEARCH);
-    searchworkflow.push_back(&PARAM_2B_ALIGN);
+    // PARAM_2B_ALIGN is already pulled in via combineList(align, prefilter) above,
+    // since it's registered on the align vector -- pushing it again here would be
+    // a duplicate parameter.
     searchworkflow.push_back(&PARAM_DISK_SPACE_LIMIT);
     searchworkflow.push_back(&PARAM_RUNNER);
     searchworkflow.push_back(&PARAM_REUSELATEST);
