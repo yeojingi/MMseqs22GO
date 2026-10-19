@@ -518,7 +518,7 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     qSeq.mapSequence(dbId, topHitKey, qSeqData + topHit.dbStartPos, topHit.dbEndPos - topHit.dbStartPos + 1);
                     realigner->initQuery(&qSeq);
 
-                    const double topHitEval = topHit.eval;
+                    const int topHitScore = topHit.score;
                     swRealignResults.clear();
 
                     data = origData;
@@ -536,10 +536,12 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                         }
                         dbSeq.mapSequence(dbId, dbKey, dbSeqData, tdbr->getSeqLen(dbId));
 
-                        Matcher::result_t res = realigner->getSWResult(&dbSeq, INT_MAX, false, covMode, realignCov, topHitEval, lcaSwMode, seqIdMode, false);
+                        // FLT_MAX: don't let eval gate/shortcut here, we filter on score below instead
+                        Matcher::result_t res = realigner->getSWResult(&dbSeq, INT_MAX, false, covMode, realignCov, FLT_MAX, lcaSwMode, seqIdMode, false);
 
-                        // e-value only (no seqId/coverage/alnLen requirement, unlike lcaAlign's checkCriteria)
-                        if (res.eval <= topHitEval) {
+                        // score only (not eval -- eval underflows to 0 for strong hits and loses
+                        // all discriminating power there; score never saturates like that)
+                        if (res.score >= topHitScore) {
                             swRealignResults.emplace_back(res);
                             rejected = 0;
                         } else {
