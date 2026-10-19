@@ -25,7 +25,7 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
         threads(static_cast<unsigned int>(par.threads)), compressed(par.compressed), outDB(outDB), outDBIndex(outDBIndex),
         maxSeqLen(par.maxSeqLen), compBiasCorrection(par.compBiasCorrection), compBiasCorrectionScale(par.compBiasCorrectionScale), altAlignment(par.altAlignment), alignmentOutputMode(par.alignmentOutputMode),
         maxAccept(static_cast<unsigned int>(par.maxAccept)), maxReject(static_cast<unsigned int>(par.maxRejected)), wrappedScoring(par.wrappedScoring),
-        lcaAlign(lcaAlign), qdbr(NULL), qDbrIdx(NULL), tdbr(NULL), tDbrIdx(NULL) {
+        lcaAlign(lcaAlign), align2b(par.align2b), qdbr(NULL), qDbrIdx(NULL), tdbr(NULL), tDbrIdx(NULL) {
     unsigned int alignmentMode = par.alignmentMode;
     if (alignmentMode == Parameters::ALIGNMENT_MODE_UNGAPPED) {
         Debug(Debug::ERROR) << "Use rescorediagonal for ungapped alignment mode.\n";
@@ -42,6 +42,15 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
         realignScoreBias = 0.0f;
         realignMaxSeqs = 1;
         addBacktrace = false;
+    }
+
+    if (align2b == true) {
+        // same T1-then-realign scaffolding as lcaAlign, but keep backtrace (needed for
+        // GO similarity scoring downstream) -- don't force addBacktrace off.
+        lcaSwMode = initSWMode(std::max(alignmentMode, (unsigned int)Parameters::ALIGNMENT_MODE_SCORE_ONLY), 0.0f, 0.0f);
+        realign = true;
+        realignScoreBias = 0.0f;
+        realignMaxSeqs = 1;
     }
 
     if (realign == true) {
@@ -496,6 +505,55 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
 
                     returnRes = &swRealignResults;
                 }
+
+                if (align2b == true && swRealignResults.size() > 0) {
+                    Matcher::result_t& topHit = swRealignResults[0];
+                    const unsigned int topHitKey = topHit.dbKey;
+                    size_t dbId = tdbr->getId(topHitKey);
+                    char *qSeqData = tdbr->getData(dbId, thread_idx);
+                    if (qSeqData == NULL) {
+                        Debug(Debug::ERROR) << "Sequence " << topHitKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                        EXIT(EXIT_FAILURE);
+                    }
+                    qSeq.mapSequence(dbId, topHitKey, qSeqData + topHit.dbStartPos, topHit.dbEndPos - topHit.dbStartPos + 1);
+                    realigner->initQuery(&qSeq);
+
+                    const double topHitEval = topHit.eval;
+                    swRealignResults.clear();
+
+                    data = origData;
+                    unsigned int rejected = 0;
+                    while (*data != '\0' && rejected < maxReject) {
+                        Util::parseKey(data, buffer);
+                        const unsigned int dbKey = (unsigned int) strtoul(buffer, NULL, 10);
+                        data = Util::skipLine(data);
+
+                        dbId = tdbr->getId(dbKey);
+                        char* dbSeqData = tdbr->getData(dbId, thread_idx);
+                        if (dbSeqData == NULL) {
+                            Debug(Debug::ERROR) << "Sequence " << dbKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                            EXIT(EXIT_FAILURE);
+                        }
+                        dbSeq.mapSequence(dbId, dbKey, dbSeqData, tdbr->getSeqLen(dbId));
+
+                        Matcher::result_t res = realigner->getSWResult(&dbSeq, INT_MAX, false, covMode, realignCov, topHitEval, lcaSwMode, seqIdMode, false);
+
+                        // e-value only (no seqId/coverage/alnLen requirement, unlike lcaAlign's checkCriteria)
+                        if (res.eval <= topHitEval) {
+                            swRealignResults.emplace_back(res);
+                            rejected = 0;
+                        } else {
+                            rejected++;
+                        }
+                    }
+
+                    if (swRealignResults.size() > 1) {
+                        SORT_SERIAL(swRealignResults.begin(), swRealignResults.end(), Matcher::compareHits);
+                    }
+
+                    returnRes = &swRealignResults;
+                }
+
                 if(alignmentOutputMode == Parameters::ALIGNMENT_OUTPUT_CLUSTER) {
                     for (size_t result = 0; result < returnRes->size(); result++) {
                         alnResultsOutString.append(SSTR((*returnRes)[result].dbKey));

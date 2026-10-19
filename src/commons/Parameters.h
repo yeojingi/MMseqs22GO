@@ -480,6 +480,7 @@ public:
     float orfFilterSens;
     double orfFilterEval;
     bool lcaSearch;
+    bool align2b;
     int translationMode;
 
     // easysearch
@@ -923,6 +924,7 @@ public:
     PARAMETER(PARAM_ORF_FILTER_S)
     PARAMETER(PARAM_ORF_FILTER_E)
     PARAMETER(PARAM_LCA_SEARCH)
+    PARAMETER(PARAM_2B_ALIGN)
     PARAMETER(PARAM_TRANSLATION_MODE)
 
     // easysearch

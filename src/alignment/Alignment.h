@@ -107,6 +107,9 @@ private:
 
     bool lcaAlign;
 
+    // experimental: separate from lcaAlign so it doesn't touch --lca-search/taxonomy
+    bool align2b;
+
     // needed for realignment
     BaseMatrix *realign_m;
 
