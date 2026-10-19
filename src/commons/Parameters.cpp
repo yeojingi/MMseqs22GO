@@ -1339,6 +1339,7 @@ Parameters::Parameters():
     searchworkflow.push_back(&PARAM_EXHAUSTIVE_SEARCH_FILTER);
     searchworkflow.push_back(&PARAM_STRAND);
     searchworkflow.push_back(&PARAM_LCA_SEARCH);
+    searchworkflow.push_back(&PARAM_2B_ALIGN);
     searchworkflow.push_back(&PARAM_DISK_SPACE_LIMIT);
     searchworkflow.push_back(&PARAM_RUNNER);
     searchworkflow.push_back(&PARAM_REUSELATEST);
