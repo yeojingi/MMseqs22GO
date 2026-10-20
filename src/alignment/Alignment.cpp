@@ -271,6 +271,12 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
 
     EvalueComputation evaluer(tdbr->getAminoAcidDBSize(), this->m, gapOpen, gapExtend);
 
+    // DEBUG: query/T1 eval+score dump for align2b (remove before shipping).
+    // One accumulator string per thread, appended to lock-free inside the parallel
+    // region (each thread only ever touches its own slot), flushed to disk once
+    // after everything is done.
+    std::vector<std::string> t1DebugLines(threads);
+
     size_t totalMemory = Util::getTotalSystemMemory();
     size_t flushSize = 1000000;
     if (totalMemory > prefdbr->getTotalDataSize()) {
@@ -519,6 +525,17 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     realigner->initQuery(&qSeq);
 
                     const int topHitScore = topHit.score;
+
+                    // DEBUG: query/T1 eval+score dump (remove before shipping)
+                    {
+                        char dbgBuf[128];
+                        int dbgLen = snprintf(dbgBuf, sizeof(dbgBuf), "%u\t%u\t%g\t%d\n",
+                                               queryDbKey, topHitKey, topHit.eval, topHitScore);
+                        if (dbgLen > 0) {
+                            t1DebugLines[thread_idx].append(dbgBuf, (size_t)dbgLen);
+                        }
+                    }
+
                     swRealignResults.clear();
 
                     data = origData;
@@ -586,6 +603,20 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
         }
     }
     dbw.close(merge);
+
+    // DEBUG: flush the query/T1 eval+score dump collected above (remove before shipping)
+    if (align2b == true) {
+        std::string t1DebugPath = outDB + "_t1debug";
+        FILE* t1DebugFP = fopen(t1DebugPath.c_str(), "w");
+        if (t1DebugFP != NULL) {
+            for (size_t t = 0; t < t1DebugLines.size(); t++) {
+                if (t1DebugLines[t].empty() == false) {
+                    fwrite(t1DebugLines[t].c_str(), 1, t1DebugLines[t].size(), t1DebugFP);
+                }
+            }
+            fclose(t1DebugFP);
+        }
+    }
 
     Debug(Debug::INFO) << alignmentsNum << " alignments calculated\n";
     Debug(Debug::INFO) << totalPassedNum << " sequence pairs passed the thresholds";
