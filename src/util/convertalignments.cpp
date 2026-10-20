@@ -516,12 +516,13 @@ int convertalignments(int argc, const char **argv, const Command &command) {
                             
                             if (needFuncMapping) {
                                 size_t tGoId = tGoDbr->sequenceReader->getId(res.dbKey);
-                                if (tGoId == UINT_MAX) {
-                                    continue;
+                                // target has no GO annotation: leave tGo/tGoLen at their
+                                // NULL/0 default so the go column prints empty instead of
+                                // dropping the whole hit
+                                if (tGoId != UINT_MAX) {
+                                    tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
+                                    tGoLen = tGoDbr->sequenceReader->getSeqLen(tGoId);
                                 }
-                                // std::cout << tGoId << std::endl;
-                                tGo = tGoDbr->sequenceReader->getData(tGoId, thread_idx);
-                                tGoLen = tGoDbr->sequenceReader->getSeqLen(tGoId);
 
                                 // Do you know Gene ontology?
                                 // goids = funcMapping->lookup(res.dbKey); // goids is a pointer to std::vector<unsigned int>
