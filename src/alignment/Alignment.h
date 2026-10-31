@@ -3,9 +3,11 @@
 
 #include "IndexReader.h"
 #include "DBReader.h"
+#include "DBWriter.h"
 #include "Parameters.h"
 #include "BaseMatrix.h"
 #include "Matcher.h"
+#include "T1Picker.h"
 
 class Alignment {
 public:
@@ -108,7 +110,10 @@ private:
     bool lcaAlign;
 
     // experimental: separate from lcaAlign so it doesn't touch --lca-search/taxonomy
-    bool align2b;
+    bool funcAlign;
+    T1Picker *t1picker;
+    DBWriter *t1Dbw;
+    DBWriter *t1t2Dbw;
 
     // needed for realignment
     BaseMatrix *realign_m;

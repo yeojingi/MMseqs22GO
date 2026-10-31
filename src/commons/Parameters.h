@@ -480,7 +480,9 @@ public:
     float orfFilterSens;
     double orfFilterEval;
     bool lcaSearch;
-    bool align2b;
+    bool funcAlign;
+    float funcAlignVoteThreshold;
+    std::string funcAlignGoDB;
     int translationMode;
 
     // easysearch
@@ -924,7 +926,9 @@ public:
     PARAMETER(PARAM_ORF_FILTER_S)
     PARAMETER(PARAM_ORF_FILTER_E)
     PARAMETER(PARAM_LCA_SEARCH)
-    PARAMETER(PARAM_2B_ALIGN)
+    PARAMETER(PARAM_FUNC_ALIGN)
+    PARAMETER(PARAM_FUNC_ALIGN_VOTE_THRESHOLD)
+    PARAMETER(PARAM_FUNC_ALIGN_GO_DB)
     PARAMETER(PARAM_TRANSLATION_MODE)
 
     // easysearch
