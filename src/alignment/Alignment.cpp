@@ -25,7 +25,7 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
         threads(static_cast<unsigned int>(par.threads)), compressed(par.compressed), outDB(outDB), outDBIndex(outDBIndex),
         maxSeqLen(par.maxSeqLen), compBiasCorrection(par.compBiasCorrection), compBiasCorrectionScale(par.compBiasCorrectionScale), altAlignment(par.altAlignment), alignmentOutputMode(par.alignmentOutputMode),
         maxAccept(static_cast<unsigned int>(par.maxAccept)), maxReject(static_cast<unsigned int>(par.maxRejected)), wrappedScoring(par.wrappedScoring),
-        lcaAlign(lcaAlign), funcAlign(par.funcAlign), t1picker(NULL), t1Dbw(NULL), t1t2Dbw(NULL), qdbr(NULL), qDbrIdx(NULL), tdbr(NULL), tDbrIdx(NULL) {
+        lcaAlign(lcaAlign), align2b(par.align2b), qdbr(NULL), qDbrIdx(NULL), tdbr(NULL), tDbrIdx(NULL) {
     unsigned int alignmentMode = par.alignmentMode;
     if (alignmentMode == Parameters::ALIGNMENT_MODE_UNGAPPED) {
         Debug(Debug::ERROR) << "Use rescorediagonal for ungapped alignment mode.\n";
@@ -44,7 +44,7 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
         addBacktrace = false;
     }
 
-    if (funcAlign == true) {
+    if (align2b == true) {
         // same T1-then-realign scaffolding as lcaAlign, but keep backtrace (needed for
         // GO similarity scoring downstream) -- don't force addBacktrace off.
         lcaSwMode = initSWMode(std::max(alignmentMode, (unsigned int)Parameters::ALIGNMENT_MODE_SCORE_ONLY), 0.0f, 0.0f);
@@ -171,20 +171,6 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
             realign_m = new SubstitutionMatrix(par.scoringMatrixFile.values.aminoacid().c_str(), 2.0, scoreBias + realignScoreBias);
         }
     }
-
-    if (funcAlign == true) {
-        // rough tmp outputs, same convention as the old _t1debug dump --
-        // both keyed by queryDbKey (same shape as a normal alignment output,
-        // so both are directly convertalis-able against queryDB/targetDB)
-        int alnDbType = DBReader<unsigned int>::setExtendedDbtype(Parameters::DBTYPE_ALIGNMENT_RES, DBReader<unsigned int>::getExtendedDbtype(prefdbr->getDbtype()));
-        t1Dbw = new DBWriter((outDB + "_t1").c_str(), (outDB + "_t1.index").c_str(), threads, compressed, alnDbType);
-        t1Dbw->open();
-        t1t2Dbw = new DBWriter((outDB + "_t1t2").c_str(), (outDB + "_t1t2.index").c_str(), threads, compressed, alnDbType);
-        t1t2Dbw->open();
-
-        t1picker = new T1Picker(par.funcAlignGoDB, threads, par.preloadMode != Parameters::PRELOAD_MODE_MMAP,
-                                 par.funcAlignVoteThreshold, t1Dbw, t1t2Dbw);
-    }
 }
 
 unsigned int Alignment::initSWMode(unsigned int alignmentMode, float covThr, float seqIdThr) {
@@ -237,14 +223,6 @@ Alignment::~Alignment() {
 
     prefdbr->close();
     delete prefdbr;
-
-    if (funcAlign == true) {
-        delete t1picker;
-        t1Dbw->close();
-        delete t1Dbw;
-        t1t2Dbw->close();
-        delete t1t2Dbw;
-    }
 }
 
 void Alignment::run(const unsigned int mpiRank, const unsigned int mpiNumProc) {
@@ -292,6 +270,12 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
     }
 
     EvalueComputation evaluer(tdbr->getAminoAcidDBSize(), this->m, gapOpen, gapExtend);
+
+    // DEBUG: query/T1 eval+score dump for align2b (remove before shipping).
+    // One accumulator string per thread, appended to lock-free inside the parallel
+    // region (each thread only ever touches its own slot), flushed to disk once
+    // after everything is done.
+    std::vector<std::string> t1DebugLines(threads);
 
     size_t totalMemory = Util::getTotalSystemMemory();
     size_t flushSize = 1000000;
@@ -528,30 +512,59 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     returnRes = &swRealignResults;
                 }
 
-                if (funcAlign == true && swResults.size() > 0) {
-                    // Greedy per-GO-term resolution (T1Picker): walk swResults
-                    // (pass-1, eval-sorted) rank by rank, chop+2nd-search+vote
-                    // only on ranks that still carry unresolved GO terms.
-                    // outResults (query-T2, plain Matcher::result_t) becomes
-                    // the normal alignment output below; T1Picker separately
-                    // writes the query-T1 and T1-T2 side DBs for inspection.
-                    size_t qId = qdbr->getId(queryDbKey);
-                    char *origQuerySeqData = qdbr->getData(qId, thread_idx);
-                    size_t origQueryLenLocal = qdbr->getSeqLen(qId);
+                if (align2b == true && swRealignResults.size() > 0) {
+                    Matcher::result_t& topHit = swRealignResults[0];
+                    const unsigned int topHitKey = topHit.dbKey;
+                    size_t dbId = tdbr->getId(topHitKey);
+                    char *qSeqData = tdbr->getData(dbId, thread_idx);
+                    if (qSeqData == NULL) {
+                        Debug(Debug::ERROR) << "Sequence " << topHitKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                        EXIT(EXIT_FAILURE);
+                    }
+                    qSeq.mapSequence(dbId, topHitKey, qSeqData + topHit.dbStartPos, topHit.dbEndPos - topHit.dbStartPos + 1);
+                    realigner->initQuery(&qSeq);
+
+                    const int topHitScore = topHit.score;
+
+                    // DEBUG: query/T1 eval+score dump (remove before shipping)
+                    {
+                        char dbgBuf[128];
+                        int dbgLen = snprintf(dbgBuf, sizeof(dbgBuf), "%u\t%u\t%g\t%d\n",
+                                               queryDbKey, topHitKey, topHit.eval, topHitScore);
+                        if (dbgLen > 0) {
+                            t1DebugLines[thread_idx].append(dbgBuf, (size_t)dbgLen);
+                        }
+                    }
 
                     swRealignResults.clear();
-                    t1picker->resolveQuery(
-                        queryDbKey, qId,
-                        origQuerySeqData, (unsigned int) origQueryLenLocal,
-                        swResults,
-                        origData,
-                        tdbr,
-                        qSeq, dbSeq, realigner,
-                        covMode, realignCov, realignSwMode, lcaSwMode, seqIdMode,
-                        includeIdentity, sameQTDB, maxAccept, maxReject,
-                        thread_idx,
-                        swRealignResults
-                    );
+
+                    data = origData;
+                    unsigned int rejected = 0;
+                    while (*data != '\0' && rejected < maxReject) {
+                        Util::parseKey(data, buffer);
+                        const unsigned int dbKey = (unsigned int) strtoul(buffer, NULL, 10);
+                        data = Util::skipLine(data);
+
+                        dbId = tdbr->getId(dbKey);
+                        char* dbSeqData = tdbr->getData(dbId, thread_idx);
+                        if (dbSeqData == NULL) {
+                            Debug(Debug::ERROR) << "Sequence " << dbKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                            EXIT(EXIT_FAILURE);
+                        }
+                        dbSeq.mapSequence(dbId, dbKey, dbSeqData, tdbr->getSeqLen(dbId));
+
+                        // FLT_MAX: don't let eval gate/shortcut here, we filter on score below instead
+                        Matcher::result_t res = realigner->getSWResult(&dbSeq, INT_MAX, false, covMode, realignCov, FLT_MAX, lcaSwMode, seqIdMode, false);
+
+                        // score only (not eval -- eval underflows to 0 for strong hits and loses
+                        // all discriminating power there; score never saturates like that)
+                        if (res.score >= topHitScore) {
+                            swRealignResults.emplace_back(res);
+                            rejected = 0;
+                        } else {
+                            rejected++;
+                        }
+                    }
 
                     if (swRealignResults.size() > 1) {
                         SORT_SERIAL(swRealignResults.begin(), swRealignResults.end(), Matcher::compareHits);
@@ -590,6 +603,20 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
         }
     }
     dbw.close(merge);
+
+    // DEBUG: flush the query/T1 eval+score dump collected above (remove before shipping)
+    if (align2b == true) {
+        std::string t1DebugPath = outDB + "_t1debug";
+        FILE* t1DebugFP = fopen(t1DebugPath.c_str(), "w");
+        if (t1DebugFP != NULL) {
+            for (size_t t = 0; t < t1DebugLines.size(); t++) {
+                if (t1DebugLines[t].empty() == false) {
+                    fwrite(t1DebugLines[t].c_str(), 1, t1DebugLines[t].size(), t1DebugFP);
+                }
+            }
+            fclose(t1DebugFP);
+        }
+    }
 
     Debug(Debug::INFO) << alignmentsNum << " alignments calculated\n";
     Debug(Debug::INFO) << totalPassedNum << " sequence pairs passed the thresholds";

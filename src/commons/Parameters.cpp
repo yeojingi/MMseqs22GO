@@ -178,9 +178,7 @@ Parameters::Parameters():
         PARAM_ORF_FILTER_S(PARAM_ORF_FILTER_S_ID, "--orf-filter-s", "ORF filter sensitivity", "Sensitivity used for query ORF prefiltering", typeid(float), (void *) &orfFilterSens, "^[0-9]*(\\.[0-9]+)?$"),
         PARAM_ORF_FILTER_E(PARAM_ORF_FILTER_E_ID, "--orf-filter-e", "ORF filter e-value", "E-value threshold used for query ORF prefiltering", typeid(double), (void *) &orfFilterEval, "^([-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?)|[0-9]*(\\.[0-9]+)?$"),
         PARAM_LCA_SEARCH(PARAM_LCA_SEARCH_ID, "--lca-search", "LCA search mode", "Efficient search for LCA candidates", typeid(bool), (void *) &lcaSearch, "", MMseqsParameter::COMMAND_PROFILE | MMseqsParameter::COMMAND_EXPERT),
-        PARAM_FUNC_ALIGN(PARAM_FUNC_ALIGN_ID, "--funcalign", "Greedy GO-aware align mode", "Experimental: greedy per-GO-term resolution over the aligned-region re-search (T1Picker) for GO annotation", typeid(bool), (void *) &funcAlign, "", MMseqsParameter::COMMAND_EXPERT),
-        PARAM_FUNC_ALIGN_VOTE_THRESHOLD(PARAM_FUNC_ALIGN_VOTE_THRESHOLD_ID, "--funcalign-vote-thr", "Greedy GO vote threshold", "With --funcalign: minimum normalized bitscore support share for a candidate GO term to be confirmed", typeid(float), (void *) &funcAlignVoteThreshold, "^0(\\.[0-9]+)?$|^1(\\.0+)?$", MMseqsParameter::COMMAND_EXPERT),
-        PARAM_FUNC_ALIGN_GO_DB(PARAM_FUNC_ALIGN_GO_DB_ID, "--funcalign-go-db", "Greedy GO annotation DB", "With --funcalign: path to the target GO annotation DB (the _func-suffixed DB)", typeid(std::string), (void *) &funcAlignGoDB, "", MMseqsParameter::COMMAND_EXPERT),
+        PARAM_2B_ALIGN(PARAM_2B_ALIGN_ID, "--2balign", "2b-align mode", "Experimental: build on top of the lca-search aligned-region re-search for GO annotation", typeid(bool), (void *) &align2b, "", MMseqsParameter::COMMAND_EXPERT),
         PARAM_TRANSLATION_MODE(PARAM_TRANSLATION_MODE_ID, "--translation-mode", "Translation mode", "Translation AA seq from nucleotide by 0: ORFs, 1: full reading frames", typeid(int), (void *) &translationMode, "^[0-1]{1}$"),
         // easysearch
         PARAM_GREEDY_BEST_HITS(PARAM_GREEDY_BEST_HITS_ID, "--greedy-best-hits", "Greedy best hits", "Choose the best hits greedily to cover the query", typeid(bool), (void *) &greedyBestHits, ""),
@@ -392,9 +390,7 @@ Parameters::Parameters():
     // alignment
     align.push_back(&PARAM_SUB_MAT);
     align.push_back(&PARAM_ADD_BACKTRACE);
-    align.push_back(&PARAM_FUNC_ALIGN);
-    align.push_back(&PARAM_FUNC_ALIGN_VOTE_THRESHOLD);
-    align.push_back(&PARAM_FUNC_ALIGN_GO_DB);
+    align.push_back(&PARAM_2B_ALIGN);
     align.push_back(&PARAM_ALIGNMENT_MODE);
     align.push_back(&PARAM_ALIGNMENT_OUTPUT_MODE);
     align.push_back(&PARAM_WRAPPED_SCORING);
@@ -1343,9 +1339,9 @@ Parameters::Parameters():
     searchworkflow.push_back(&PARAM_EXHAUSTIVE_SEARCH_FILTER);
     searchworkflow.push_back(&PARAM_STRAND);
     searchworkflow.push_back(&PARAM_LCA_SEARCH);
-    // PARAM_FUNC_ALIGN(_VOTE_THRESHOLD/_GO_DB) is already pulled in via
-    // combineList(align, prefilter) above, since it's registered on the align
-    // vector -- pushing it again here would be a duplicate parameter.
+    // PARAM_2B_ALIGN is already pulled in via combineList(align, prefilter) above,
+    // since it's registered on the align vector -- pushing it again here would be
+    // a duplicate parameter.
     searchworkflow.push_back(&PARAM_DISK_SPACE_LIMIT);
     searchworkflow.push_back(&PARAM_RUNNER);
     searchworkflow.push_back(&PARAM_REUSELATEST);
@@ -2387,9 +2383,7 @@ void Parameters::setDefaults() {
     orfFilterSens = 2.0;
     orfFilterEval = 100;
     lcaSearch = false;
-    funcAlign = false;
-    funcAlignVoteThreshold = 0.5f;
-    funcAlignGoDB = "";
+    align2b = false;
     translationMode = PARAM_TRANSLATION_MODE_ORF;
 
     greedyBestHits = false;
