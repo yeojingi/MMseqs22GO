@@ -6,6 +6,8 @@
 #include "Parameters.h"
 #include "BaseMatrix.h"
 #include "Matcher.h"
+#include "NcbiTaxonomy.h"
+#include "MappingReader.h"
 
 class Alignment {
 public:
@@ -109,6 +111,20 @@ private:
 
     // experimental: separate from lcaAlign so it doesn't touch --lca-search/taxonomy
     bool align2b;
+
+    // experimental: taxonomic exclusion benchmark on top of align2b -- for each
+    // standard rank, pretend targets at or below that rank's distance from the
+    // query (q-T1) / T1 (T1-T2) don't exist, and write one extra <outDB>_<rank>
+    bool align2bExclusion;
+    NcbiTaxonomy *taxonomy;
+    MappingReader *queryTaxMap;
+    MappingReader *targetTaxMap;
+
+    // LCA(taxA, taxB), walked up from the LCA to the first node with a standard
+    // rank (species/genus/family/order/class/phylum/superkingdom) -- true if
+    // that rank is at least as specific as thresholdRank (i.e. taxA/taxB are
+    // "too close" to pretend they're unrelated at thresholdRank's distance)
+    bool isTooClose(unsigned int taxA, unsigned int taxB, int thresholdRankIdx) const;
 
     // needed for realignment
     BaseMatrix *realign_m;

@@ -179,6 +179,7 @@ Parameters::Parameters():
         PARAM_ORF_FILTER_E(PARAM_ORF_FILTER_E_ID, "--orf-filter-e", "ORF filter e-value", "E-value threshold used for query ORF prefiltering", typeid(double), (void *) &orfFilterEval, "^([-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?)|[0-9]*(\\.[0-9]+)?$"),
         PARAM_LCA_SEARCH(PARAM_LCA_SEARCH_ID, "--lca-search", "LCA search mode", "Efficient search for LCA candidates", typeid(bool), (void *) &lcaSearch, "", MMseqsParameter::COMMAND_PROFILE | MMseqsParameter::COMMAND_EXPERT),
         PARAM_2B_ALIGN(PARAM_2B_ALIGN_ID, "--2balign", "2b-align mode", "Experimental: build on top of the lca-search aligned-region re-search for GO annotation", typeid(bool), (void *) &align2b, "", MMseqsParameter::COMMAND_EXPERT),
+        PARAM_2B_ALIGN_EXCLUSION(PARAM_2B_ALIGN_EXCLUSION_ID, "--2balign-exclusion", "2b-align taxonomic exclusion benchmark", "With --2balign: for each of species/genus/family/order/class/phylum/superkingdom, pretend targets at or below that rank's distance from the query/T1 do not exist (LCA walked up from the first standard rank), writing one extra <outDB>_<rank> per threshold alongside the normal (unfiltered) <outDB> output", typeid(bool), (void *) &align2bExclusion, "", MMseqsParameter::COMMAND_EXPERT),
         PARAM_TRANSLATION_MODE(PARAM_TRANSLATION_MODE_ID, "--translation-mode", "Translation mode", "Translation AA seq from nucleotide by 0: ORFs, 1: full reading frames", typeid(int), (void *) &translationMode, "^[0-1]{1}$"),
         // easysearch
         PARAM_GREEDY_BEST_HITS(PARAM_GREEDY_BEST_HITS_ID, "--greedy-best-hits", "Greedy best hits", "Choose the best hits greedily to cover the query", typeid(bool), (void *) &greedyBestHits, ""),
@@ -391,6 +392,7 @@ Parameters::Parameters():
     align.push_back(&PARAM_SUB_MAT);
     align.push_back(&PARAM_ADD_BACKTRACE);
     align.push_back(&PARAM_2B_ALIGN);
+    align.push_back(&PARAM_2B_ALIGN_EXCLUSION);
     align.push_back(&PARAM_ALIGNMENT_MODE);
     align.push_back(&PARAM_ALIGNMENT_OUTPUT_MODE);
     align.push_back(&PARAM_WRAPPED_SCORING);
@@ -2384,6 +2386,7 @@ void Parameters::setDefaults() {
     orfFilterEval = 100;
     lcaSearch = false;
     align2b = false;
+    align2bExclusion = false;
     translationMode = PARAM_TRANSLATION_MODE_ORF;
 
     greedyBestHits = false;

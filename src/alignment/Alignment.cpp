@@ -25,10 +25,16 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
         threads(static_cast<unsigned int>(par.threads)), compressed(par.compressed), outDB(outDB), outDBIndex(outDBIndex),
         maxSeqLen(par.maxSeqLen), compBiasCorrection(par.compBiasCorrection), compBiasCorrectionScale(par.compBiasCorrectionScale), altAlignment(par.altAlignment), alignmentOutputMode(par.alignmentOutputMode),
         maxAccept(static_cast<unsigned int>(par.maxAccept)), maxReject(static_cast<unsigned int>(par.maxRejected)), wrappedScoring(par.wrappedScoring),
-        lcaAlign(lcaAlign), align2b(par.align2b), qdbr(NULL), qDbrIdx(NULL), tdbr(NULL), tDbrIdx(NULL) {
+        lcaAlign(lcaAlign), align2b(par.align2b), align2bExclusion(par.align2bExclusion),
+        taxonomy(NULL), queryTaxMap(NULL), targetTaxMap(NULL), qdbr(NULL), qDbrIdx(NULL), tdbr(NULL), tDbrIdx(NULL) {
     unsigned int alignmentMode = par.alignmentMode;
     if (alignmentMode == Parameters::ALIGNMENT_MODE_UNGAPPED) {
         Debug(Debug::ERROR) << "Use rescorediagonal for ungapped alignment mode.\n";
+        EXIT(EXIT_FAILURE);
+    }
+
+    if (lcaAlign == true && align2b == true) {
+        Debug(Debug::ERROR) << "--lca-search and --2balign both perform their own second search; only one can be enabled at a time.\n";
         EXIT(EXIT_FAILURE);
     }
 
@@ -171,6 +177,12 @@ Alignment::Alignment(const std::string &querySeqDB, const std::string &targetSeq
             realign_m = new SubstitutionMatrix(par.scoringMatrixFile.values.aminoacid().c_str(), 2.0, scoreBias + realignScoreBias);
         }
     }
+
+    if (align2bExclusion == true) {
+        taxonomy = NcbiTaxonomy::openTaxonomy(targetSeqDB);
+        targetTaxMap = new MappingReader(targetSeqDB);
+        queryTaxMap = sameQTDB ? targetTaxMap : new MappingReader(querySeqDB);
+    }
 }
 
 unsigned int Alignment::initSWMode(unsigned int alignmentMode, float covThr, float seqIdThr) {
@@ -199,6 +211,41 @@ unsigned int Alignment::initSWMode(unsigned int alignmentMode, float covThr, flo
     return swMode;
 }
 
+// local to align2b exclusion only (not NcbiTaxonomy::findRankIndex): recognizes a
+// couple of rank-string aliases that NCBI's own standard rank ladder doesn't cover,
+// without touching the taxonomy module used everywhere else.
+// - "domain": newer NCBI taxdump releases renamed "superkingdom" to "domain"
+// - "acellular root": viruses sit outside "cellular organisms" entirely, so their
+//   top-level division (the Viruses node itself) carries this rank string instead
+//   of "superkingdom"/"domain" -- same broadness, same slot (28)
+static int findRankIndexWithAliases(const std::string &rank) {
+    if (rank == "domain" || rank == "acellular root") {
+        return 28;
+    }
+    return NcbiTaxonomy::findRankIndex(rank);
+}
+
+bool Alignment::isTooClose(unsigned int taxA, unsigned int taxB, int thresholdRankIdx) const {
+    if (taxA == 0 || taxB == 0) {
+        // no taxonomy assigned to one side -- can't tell, don't exclude
+        return false;
+    }
+    TaxID lcaId = taxonomy->LCA((TaxID) taxA, (TaxID) taxB);
+    TaxonNode const *node = taxonomy->taxonNode(lcaId, false);
+    while (node != NULL) {
+        int rankIdx = findRankIndexWithAliases(taxonomy->getString(node->rankIdx));
+        if (rankIdx >= 0) {
+            return rankIdx <= thresholdRankIdx;
+        }
+        if (node->parentTaxId == node->taxId) {
+            break;
+        }
+        node = taxonomy->taxonNode(node->parentTaxId, false);
+    }
+    // walked all the way to the root without hitting a standard rank
+    return false;
+}
+
 Alignment::~Alignment() {
     if (realign_m != NULL) {
         delete realign_m;
@@ -223,6 +270,14 @@ Alignment::~Alignment() {
 
     prefdbr->close();
     delete prefdbr;
+
+    if (align2bExclusion == true) {
+        delete taxonomy;
+        if (queryTaxMap != targetTaxMap) {
+            delete queryTaxMap;
+        }
+        delete targetTaxMap;
+    }
 }
 
 void Alignment::run(const unsigned int mpiRank, const unsigned int mpiNumProc) {
@@ -270,6 +325,21 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
     }
 
     EvalueComputation evaluer(tdbr->getAminoAcidDBSize(), this->m, gapOpen, gapExtend);
+
+    // taxonomic exclusion benchmark: one extra <outDB>_<rank> output per
+    // standard rank, alongside the normal (unfiltered) <outDB> output
+    std::vector<std::pair<std::string, int>> exclusionRanks;
+    std::vector<DBWriter*> exclusionDbw;
+    if (align2b == true && align2bExclusion == true) {
+        static const char* rankNames[] = {"species", "genus", "family", "order", "class", "phylum", "superkingdom"};
+        for (size_t r = 0; r < sizeof(rankNames) / sizeof(rankNames[0]); r++) {
+            exclusionRanks.emplace_back(rankNames[r], NcbiTaxonomy::findRankIndex(rankNames[r]));
+            std::string rankOutDB = outDB + "_" + rankNames[r];
+            DBWriter *w = new DBWriter(rankOutDB.c_str(), (rankOutDB + ".index").c_str(), threads, compressed, dbtype);
+            w->open();
+            exclusionDbw.push_back(w);
+        }
+    }
 
     // DEBUG: query/T1 eval+score dump for align2b (remove before shipping).
     // One accumulator string per thread, appended to lock-free inside the parallel
@@ -512,7 +582,7 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     returnRes = &swRealignResults;
                 }
 
-                if (align2b == true && swRealignResults.size() > 0) {
+                if (align2b == true && align2bExclusion == false && swRealignResults.size() > 0) {
                     Matcher::result_t& topHit = swRealignResults[0];
                     const unsigned int topHitKey = topHit.dbKey;
                     size_t dbId = tdbr->getId(topHitKey);
@@ -573,6 +643,113 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     returnRes = &swRealignResults;
                 }
 
+                // taxonomic exclusion benchmark: picks T1 fresh from swResults
+                // (pass-1, eval-sorted) for every variant, since which candidate
+                // is "best" changes once too-close candidates are excluded --
+                // doesn't reuse the lcaAlign-derived swRealignResults above.
+                if (align2b == true && align2bExclusion == true && swResults.size() > 0) {
+                    unsigned int queryTax = queryTaxMap->lookup(queryDbKey);
+                    size_t qId = qdbr->getId(queryDbKey);
+                    char *origQuerySeqData = qdbr->getData(qId, thread_idx);
+
+                    auto pickAndSearch = [&](int thresholdRankIdx, bool useExclusion) -> std::vector<Matcher::result_t> {
+                        std::vector<Matcher::result_t> localResults;
+
+                        int chosenIdx = -1;
+                        for (size_t c = 0; c < swResults.size(); c++) {
+                            if (useExclusion) {
+                                unsigned int candTax = targetTaxMap->lookup(swResults[c].dbKey);
+                                if (isTooClose(queryTax, candTax, thresholdRankIdx)) {
+                                    continue;
+                                }
+                            }
+                            chosenIdx = (int) c;
+                            break;
+                        }
+                        if (chosenIdx < 0) {
+                            return localResults;
+                        }
+
+                        Matcher::result_t &cand = swResults[chosenIdx];
+                        qSeq.mapSequence(qId, queryDbKey, origQuerySeqData, origQueryLen);
+                        realigner->initQuery(&qSeq);
+
+                        size_t candDbId = tdbr->getId(cand.dbKey);
+                        char *candDbSeqData = tdbr->getData(candDbId, thread_idx);
+                        if (candDbSeqData == NULL) {
+                            Debug(Debug::ERROR) << "Sequence " << cand.dbKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                            EXIT(EXIT_FAILURE);
+                        }
+                        dbSeq.mapSequence(candDbId, cand.dbKey, candDbSeqData, tdbr->getSeqLen(candDbId));
+                        const bool candIsIdentity = (queryDbKey == cand.dbKey && (includeIdentity || sameQTDB)) ? true : false;
+                        Matcher::result_t topHit = realigner->getSWResult(&dbSeq, INT_MAX, false, covMode, realignCov, FLT_MAX, lcaSwMode, seqIdMode, candIsIdentity);
+
+                        const unsigned int topHitKey = topHit.dbKey;
+                        size_t dbId = tdbr->getId(topHitKey);
+                        char *qSeqData = tdbr->getData(dbId, thread_idx);
+                        if (qSeqData == NULL) {
+                            Debug(Debug::ERROR) << "Sequence " << topHitKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                            EXIT(EXIT_FAILURE);
+                        }
+                        qSeq.mapSequence(dbId, topHitKey, qSeqData + topHit.dbStartPos, topHit.dbEndPos - topHit.dbStartPos + 1);
+                        realigner->initQuery(&qSeq);
+
+                        const int topHitScore = topHit.score;
+                        unsigned int t1Tax = useExclusion ? targetTaxMap->lookup(topHitKey) : 0;
+
+                        char *data2 = origData;
+                        unsigned int rejected = 0;
+                        while (*data2 != '\0' && rejected < maxReject) {
+                            Util::parseKey(data2, buffer);
+                            const unsigned int dbKey = (unsigned int) strtoul(buffer, NULL, 10);
+                            data2 = Util::skipLine(data2);
+
+                            if (useExclusion) {
+                                unsigned int cTax = targetTaxMap->lookup(dbKey);
+                                if (isTooClose(t1Tax, cTax, thresholdRankIdx)) {
+                                    continue;
+                                }
+                            }
+
+                            dbId = tdbr->getId(dbKey);
+                            char *dbSeqData = tdbr->getData(dbId, thread_idx);
+                            if (dbSeqData == NULL) {
+                                Debug(Debug::ERROR) << "Sequence " << dbKey << " is required in the prefiltering, but is not contained in the target sequence database!\nPlease check your database.\n";
+                                EXIT(EXIT_FAILURE);
+                            }
+                            dbSeq.mapSequence(dbId, dbKey, dbSeqData, tdbr->getSeqLen(dbId));
+
+                            Matcher::result_t res = realigner->getSWResult(&dbSeq, INT_MAX, false, covMode, realignCov, FLT_MAX, lcaSwMode, seqIdMode, false);
+                            if (res.score >= topHitScore) {
+                                localResults.emplace_back(res);
+                                rejected = 0;
+                            } else {
+                                rejected++;
+                            }
+                        }
+
+                        if (localResults.size() > 1) {
+                            SORT_SERIAL(localResults.begin(), localResults.end(), Matcher::compareHits);
+                        }
+                        return localResults;
+                    };
+
+                    // base (no exclusion) goes through the normal returnRes/dbw path below
+                    swRealignResults = pickAndSearch(-1, false);
+                    returnRes = &swRealignResults;
+
+                    // one extra suffixed output per standard rank
+                    for (size_t r = 0; r < exclusionRanks.size(); r++) {
+                        std::vector<Matcher::result_t> rankResults = pickAndSearch(exclusionRanks[r].second, true);
+                        std::string rankOutString;
+                        for (size_t result = 0; result < rankResults.size(); result++) {
+                            size_t len = Matcher::resultToBuffer(buffer, rankResults[result], addBacktrace);
+                            rankOutString.append(buffer, len);
+                        }
+                        exclusionDbw[r]->writeData(rankOutString.c_str(), rankOutString.length(), queryDbKey, thread_idx);
+                    }
+                }
+
                 if(alignmentOutputMode == Parameters::ALIGNMENT_OUTPUT_CLUSTER) {
                     for (size_t result = 0; result < returnRes->size(); result++) {
                         alnResultsOutString.append(SSTR((*returnRes)[result].dbKey));
@@ -603,6 +780,11 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
         }
     }
     dbw.close(merge);
+
+    for (size_t r = 0; r < exclusionDbw.size(); r++) {
+        exclusionDbw[r]->close(merge);
+        delete exclusionDbw[r];
+    }
 
     // DEBUG: flush the query/T1 eval+score dump collected above (remove before shipping)
     if (align2b == true) {
