@@ -658,6 +658,13 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                         int chosenIdx = -1;
                         for (size_t c = 0; c < swResults.size(); c++) {
                             if (useExclusion) {
+                                // never anchor on the query itself (possible when
+                                // add-self-matches is on) -- it's not a real homolog,
+                                // and the base (non-exclusion) output should keep
+                                // matching plain align2b's behavior, self included
+                                if (swResults[c].dbKey == queryDbKey) {
+                                    continue;
+                                }
                                 unsigned int candTax = targetTaxMap->lookup(swResults[c].dbKey);
                                 if (isTooClose(queryTax, candTax, thresholdRankIdx)) {
                                     continue;
@@ -705,6 +712,13 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                             data2 = Util::skipLine(data2);
 
                             if (useExclusion) {
+                                // never report the original query itself as a T2 hit --
+                                // it may be present in the candidate list (add-self-matches),
+                                // and the T1-vs-candidate taxonomic check below has no way
+                                // to know this particular candidate IS the query
+                                if (dbKey == queryDbKey) {
+                                    continue;
+                                }
                                 unsigned int cTax = targetTaxMap->lookup(dbKey);
                                 if (isTooClose(t1Tax, cTax, thresholdRankIdx)) {
                                     continue;
