@@ -720,7 +720,15 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                                     continue;
                                 }
                                 unsigned int cTax = targetTaxMap->lookup(dbKey);
-                                if (isTooClose(t1Tax, cTax, thresholdRankIdx)) {
+                                // check against BOTH query and T1: T1 itself is picked
+                                // per-threshold (a stricter threshold excludes more
+                                // candidates while picking T1, landing on a farther T1),
+                                // so checking only T1-vs-candidate lets query-close
+                                // candidates slip through whenever that happens to pick
+                                // a distant T1. The benchmark's premise is "pretend
+                                // targets within this rank of the query don't exist" --
+                                // that has to hold for every candidate, not just T1.
+                                if (isTooClose(queryTax, cTax, thresholdRankIdx) || isTooClose(t1Tax, cTax, thresholdRankIdx)) {
                                     continue;
                                 }
                             }
