@@ -330,6 +330,10 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
     // standard rank, alongside the normal (unfiltered) <outDB> output
     std::vector<std::pair<std::string, int>> exclusionRanks;
     std::vector<DBWriter*> exclusionDbw;
+    // DEBUG: which T1 got picked for each rank, as a real q-T1 alignment record
+    // (so it can be convertalis'd and compared against a reference implementation) --
+    // lands alongside outDB, i.e. inside the same tmp dir the search workflow uses.
+    std::vector<DBWriter*> t1AlignDbw;
     if (align2b == true && align2bExclusion == true) {
         static const char* rankNames[] = {"species", "genus", "family", "order", "class", "phylum", "superkingdom"};
         for (size_t r = 0; r < sizeof(rankNames) / sizeof(rankNames[0]); r++) {
@@ -338,6 +342,11 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
             DBWriter *w = new DBWriter(rankOutDB.c_str(), (rankOutDB + ".index").c_str(), threads, compressed, dbtype);
             w->open();
             exclusionDbw.push_back(w);
+
+            std::string t1OutDB = outDB + "_t1align_" + rankNames[r];
+            DBWriter *t1w = new DBWriter(t1OutDB.c_str(), (t1OutDB + ".index").c_str(), threads, compressed, dbtype);
+            t1w->open();
+            t1AlignDbw.push_back(t1w);
         }
     }
 
@@ -652,7 +661,7 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     size_t qId = qdbr->getId(queryDbKey);
                     char *origQuerySeqData = qdbr->getData(qId, thread_idx);
 
-                    auto pickAndSearch = [&](int thresholdRankIdx, bool useExclusion) -> std::vector<Matcher::result_t> {
+                    auto pickAndSearch = [&](int thresholdRankIdx, bool useExclusion, DBWriter *t1Dbw) -> std::vector<Matcher::result_t> {
                         std::vector<Matcher::result_t> localResults;
 
                         int chosenIdx = -1;
@@ -703,6 +712,12 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
 
                         const int topHitScore = topHit.score;
                         unsigned int t1Tax = useExclusion ? targetTaxMap->lookup(topHitKey) : 0;
+
+                        // DEBUG: dump the picked T1 as a real q-T1 alignment record
+                        if (t1Dbw != NULL) {
+                            size_t t1Len = Matcher::resultToBuffer(buffer, topHit, addBacktrace);
+                            t1Dbw->writeData(buffer, t1Len, queryDbKey, thread_idx);
+                        }
 
                         char *data2 = origData;
                         unsigned int rejected = 0;
@@ -757,12 +772,12 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     };
 
                     // base (no exclusion) goes through the normal returnRes/dbw path below
-                    swRealignResults = pickAndSearch(-1, false);
+                    swRealignResults = pickAndSearch(-1, false, NULL);
                     returnRes = &swRealignResults;
 
                     // one extra suffixed output per standard rank
                     for (size_t r = 0; r < exclusionRanks.size(); r++) {
-                        std::vector<Matcher::result_t> rankResults = pickAndSearch(exclusionRanks[r].second, true);
+                        std::vector<Matcher::result_t> rankResults = pickAndSearch(exclusionRanks[r].second, true, t1AlignDbw[r]);
                         std::string rankOutString;
                         for (size_t result = 0; result < rankResults.size(); result++) {
                             size_t len = Matcher::resultToBuffer(buffer, rankResults[result], addBacktrace);
@@ -806,6 +821,10 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
     for (size_t r = 0; r < exclusionDbw.size(); r++) {
         exclusionDbw[r]->close(merge);
         delete exclusionDbw[r];
+    }
+    for (size_t r = 0; r < t1AlignDbw.size(); r++) {
+        t1AlignDbw[r]->close(merge);
+        delete t1AlignDbw[r];
     }
 
     // DEBUG: flush the query/T1 eval+score dump collected above (remove before shipping)
