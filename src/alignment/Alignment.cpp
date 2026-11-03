@@ -334,6 +334,8 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
     // (so it can be convertalis'd and compared against a reference implementation) --
     // lands alongside outDB, i.e. inside the same tmp dir the search workflow uses.
     std::vector<DBWriter*> t1AlignDbw;
+    // same rank-filtered T2 rescan, but T1 itself picked without exclusion (plain best hit)
+    std::vector<DBWriter*> t1NoExclDbw;
     if (align2b == true && align2bExclusion == true) {
         static const char* rankNames[] = {"species", "genus", "family", "order", "class", "phylum", "superkingdom"};
         for (size_t r = 0; r < sizeof(rankNames) / sizeof(rankNames[0]); r++) {
@@ -347,6 +349,11 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
             DBWriter *t1w = new DBWriter(t1OutDB.c_str(), (t1OutDB + ".index").c_str(), threads, compressed, dbtype);
             t1w->open();
             t1AlignDbw.push_back(t1w);
+
+            std::string t1NoExclOutDB = outDB + "_" + rankNames[r] + "_t1noexcl";
+            DBWriter *t1ne = new DBWriter(t1NoExclOutDB.c_str(), (t1NoExclOutDB + ".index").c_str(), threads, compressed, dbtype);
+            t1ne->open();
+            t1NoExclDbw.push_back(t1ne);
         }
     }
 
@@ -661,12 +668,17 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                     size_t qId = qdbr->getId(queryDbKey);
                     char *origQuerySeqData = qdbr->getData(qId, thread_idx);
 
-                    auto pickAndSearch = [&](int thresholdRankIdx, bool useExclusion, DBWriter *t1Dbw) -> std::vector<Matcher::result_t> {
+                    // thresholdRankIdx / pickT1WithExclusion: whether picking T1 itself
+                    // pretends query-close candidates don't exist. excludeT2: whether the
+                    // T1-T2 rescan pretends query-close candidates don't exist. These are
+                    // independent so a variant can use the plain (unfiltered) T1 pick while
+                    // still taxonomically filtering T2 against the query.
+                    auto pickAndSearch = [&](int thresholdRankIdx, bool pickT1WithExclusion, bool excludeT2, DBWriter *t1Dbw) -> std::vector<Matcher::result_t> {
                         std::vector<Matcher::result_t> localResults;
 
                         int chosenIdx = -1;
                         for (size_t c = 0; c < swResults.size(); c++) {
-                            if (useExclusion) {
+                            if (pickT1WithExclusion) {
                                 // never anchor on the query itself (possible when
                                 // add-self-matches is on) -- it's not a real homolog,
                                 // and the base (non-exclusion) output should keep
@@ -711,7 +723,6 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                         realigner->initQuery(&qSeq);
 
                         const int topHitScore = topHit.score;
-                        unsigned int t1Tax = useExclusion ? targetTaxMap->lookup(topHitKey) : 0;
 
                         // DEBUG: dump the picked T1 as a real q-T1 alignment record
                         if (t1Dbw != NULL) {
@@ -726,24 +737,22 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                             const unsigned int dbKey = (unsigned int) strtoul(buffer, NULL, 10);
                             data2 = Util::skipLine(data2);
 
-                            if (useExclusion) {
+                            if (excludeT2) {
                                 // never report the original query itself as a T2 hit --
-                                // it may be present in the candidate list (add-self-matches),
-                                // and the T1-vs-candidate taxonomic check below has no way
-                                // to know this particular candidate IS the query
+                                // it may be present in the candidate list (add-self-matches)
                                 if (dbKey == queryDbKey) {
                                     continue;
                                 }
+                                // exclusion is relative to the QUERY, not T1: the benchmark's
+                                // premise is "pretend targets within this rank of the query
+                                // don't exist", so T2 candidates are measured against the
+                                // query, same as the T1 pick itself -- not against whichever
+                                // T1 happened to get picked (T1 can be in a totally different
+                                // part of the tree from the query, e.g. a different domain,
+                                // in which case comparing T2 to T1 instead of to the query
+                                // excludes everything or nothing for the wrong reason)
                                 unsigned int cTax = targetTaxMap->lookup(dbKey);
-                                // check against BOTH query and T1: T1 itself is picked
-                                // per-threshold (a stricter threshold excludes more
-                                // candidates while picking T1, landing on a farther T1),
-                                // so checking only T1-vs-candidate lets query-close
-                                // candidates slip through whenever that happens to pick
-                                // a distant T1. The benchmark's premise is "pretend
-                                // targets within this rank of the query don't exist" --
-                                // that has to hold for every candidate, not just T1.
-                                if (isTooClose(queryTax, cTax, thresholdRankIdx) || isTooClose(t1Tax, cTax, thresholdRankIdx)) {
+                                if (isTooClose(queryTax, cTax, thresholdRankIdx)) {
                                     continue;
                                 }
                             }
@@ -771,19 +780,32 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                         return localResults;
                     };
 
-                    // base (no exclusion) goes through the normal returnRes/dbw path below
-                    swRealignResults = pickAndSearch(-1, false, NULL);
+                    // base (no exclusion at all) goes through the normal returnRes/dbw path below
+                    swRealignResults = pickAndSearch(-1, false, false, NULL);
                     returnRes = &swRealignResults;
 
-                    // one extra suffixed output per standard rank
+                    // one extra suffixed output per standard rank: T1 picked with exclusion,
+                    // T2 rescan excluded against the query too
                     for (size_t r = 0; r < exclusionRanks.size(); r++) {
-                        std::vector<Matcher::result_t> rankResults = pickAndSearch(exclusionRanks[r].second, true, t1AlignDbw[r]);
+                        std::vector<Matcher::result_t> rankResults = pickAndSearch(exclusionRanks[r].second, true, true, t1AlignDbw[r]);
                         std::string rankOutString;
                         for (size_t result = 0; result < rankResults.size(); result++) {
                             size_t len = Matcher::resultToBuffer(buffer, rankResults[result], addBacktrace);
                             rankOutString.append(buffer, len);
                         }
                         exclusionDbw[r]->writeData(rankOutString.c_str(), rankOutString.length(), queryDbKey, thread_idx);
+                    }
+
+                    // same, but T1 is picked WITHOUT exclusion (the plain best hit, like
+                    // base) -- only the T2 rescan excludes query-close candidates
+                    for (size_t r = 0; r < exclusionRanks.size(); r++) {
+                        std::vector<Matcher::result_t> rankResults = pickAndSearch(exclusionRanks[r].second, false, true, NULL);
+                        std::string rankOutString;
+                        for (size_t result = 0; result < rankResults.size(); result++) {
+                            size_t len = Matcher::resultToBuffer(buffer, rankResults[result], addBacktrace);
+                            rankOutString.append(buffer, len);
+                        }
+                        t1NoExclDbw[r]->writeData(rankOutString.c_str(), rankOutString.length(), queryDbKey, thread_idx);
                     }
                 }
 
@@ -825,6 +847,10 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
     for (size_t r = 0; r < t1AlignDbw.size(); r++) {
         t1AlignDbw[r]->close(merge);
         delete t1AlignDbw[r];
+    }
+    for (size_t r = 0; r < t1NoExclDbw.size(); r++) {
+        t1NoExclDbw[r]->close(merge);
+        delete t1NoExclDbw[r];
     }
 
     // DEBUG: flush the query/T1 eval+score dump collected above (remove before shipping)
