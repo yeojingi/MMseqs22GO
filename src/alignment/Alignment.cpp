@@ -811,6 +811,15 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                         if (localResults.size() > 1) {
                             SORT_SERIAL(localResults.begin(), localResults.end(), Matcher::compareHits);
                         }
+
+                        // no T2 candidate reached topHitScore (e.g. the raw prefilter
+                        // scan above gave up via maxReject before reaching anything that
+                        // could beat it) -- fall back to reporting q-T1 itself rather
+                        // than an empty result for this query/rank
+                        if (localResults.empty()) {
+                            localResults.push_back(topHit);
+                        }
+
                         return localResults;
                     };
 
