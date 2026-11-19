@@ -326,6 +326,24 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
 
     EvalueComputation evaluer(tdbr->getAminoAcidDBSize(), this->m, gapOpen, gapExtend);
 
+#ifndef NDEBUG
+    // Debug-build only: dump the full pass-1 (search1) SW align result list as a
+    // real alignment DB, plus which single candidate pass-1 itself would have
+    // picked as T1 (plain best hit, before any 2nd search / exclusion logic runs
+    // at all) -- lands alongside outDB. Compiled out entirely in Release builds.
+    DBWriter *pass1Dbw = NULL;
+    DBWriter *pass1T1Dbw = NULL;
+    if (align2b == true) {
+        std::string pass1OutDB = outDB + "_pass1";
+        pass1Dbw = new DBWriter(pass1OutDB.c_str(), (pass1OutDB + ".index").c_str(), threads, compressed, dbtype);
+        pass1Dbw->open();
+
+        std::string pass1T1OutDB = outDB + "_pass1_t1";
+        pass1T1Dbw = new DBWriter(pass1T1OutDB.c_str(), (pass1T1OutDB + ".index").c_str(), threads, compressed, dbtype);
+        pass1T1Dbw->open();
+    }
+#endif
+
     // taxonomic exclusion benchmark: one extra <outDB>_<rank> output per
     // standard rank, alongside the normal (unfiltered) <outDB> output
     std::vector<std::pair<std::string, int>> exclusionRanks;
@@ -504,6 +522,22 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
                 if (swResults.size() > 1) {
                     SORT_SERIAL(swResults.begin(), swResults.end(), Matcher::compareHits);
                 }
+
+#ifndef NDEBUG
+                if (align2b == true) {
+                    std::string pass1OutString;
+                    for (size_t result = 0; result < swResults.size(); result++) {
+                        size_t len = Matcher::resultToBuffer(buffer, swResults[result], addBacktrace);
+                        pass1OutString.append(buffer, len);
+                    }
+                    pass1Dbw->writeData(pass1OutString.c_str(), pass1OutString.length(), queryDbKey, thread_idx);
+
+                    if (swResults.size() > 0) {
+                        size_t len = Matcher::resultToBuffer(buffer, swResults[0], addBacktrace);
+                        pass1T1Dbw->writeData(buffer, len, queryDbKey, thread_idx);
+                    }
+                }
+#endif
 
                 std::vector<Matcher::result_t> *returnRes = &swResults;
                 if (realign == true && *origData != '\0') {
@@ -852,6 +886,17 @@ void Alignment::run(const std::string &outDB, const std::string &outDBIndex, con
         t1NoExclDbw[r]->close(merge);
         delete t1NoExclDbw[r];
     }
+
+#ifndef NDEBUG
+    if (pass1Dbw != NULL) {
+        pass1Dbw->close(merge);
+        delete pass1Dbw;
+    }
+    if (pass1T1Dbw != NULL) {
+        pass1T1Dbw->close(merge);
+        delete pass1T1Dbw;
+    }
+#endif
 
     // DEBUG: flush the query/T1 eval+score dump collected above (remove before shipping)
     if (align2b == true) {
